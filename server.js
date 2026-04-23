@@ -21,8 +21,9 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 // Persistent data dir — Railway volume at /data, fallback to local
 const DATA_DIR = fs.existsSync('/data') ? '/data' : path.join(__dirname, '.data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-const CONDITIONS_LOG = path.join(DATA_DIR, 'conditions-log.jsonl');
-const REPORTS_LOG    = path.join(DATA_DIR, 'reports.jsonl');
+const CONDITIONS_LOG  = path.join(DATA_DIR, 'conditions-log.jsonl');
+const REPORTS_LOG     = path.join(DATA_DIR, 'reports.jsonl');
+const FORECAST_LOG    = path.join(DATA_DIR, 'forecast-log.jsonl');
 
 function appendJsonl(file, obj) {
   try { fs.appendFileSync(file, JSON.stringify(obj) + '\n'); } catch (e) { console.error('appendJsonl', e.message); }
@@ -45,6 +46,57 @@ function slimEntry(entry) {
   return slim;
 }
 
+// NWS prediction store — write future forecast hours we haven't seen before
+// Key: Math.floor(ts/3600000) — one entry per valid hour, first prediction wins
+let forecastLoggedHours = null; // in-memory set loaded once, avoids re-reading file
+function loadForecastLoggedHours() {
+  if (forecastLoggedHours !== null) return;
+  const entries = readJsonl(FORECAST_LOG);
+  forecastLoggedHours = new Set(entries.map(e => e.hourKey));
+}
+
+function persistForecastHours(forecastHours) {
+  loadForecastLoggedHours();
+  const now = Date.now();
+  for (const h of forecastHours) {
+    if (h.time <= now) continue; // only log future predictions
+    const hourKey = Math.floor(h.time / 3600000);
+    if (forecastLoggedHours.has(hourKey)) continue;
+    forecastLoggedHours.add(hourKey);
+    appendJsonl(FORECAST_LOG, {
+      hourKey,
+      validTs: h.time,
+      predictedAt: now,
+      windSpeedKt: h.windSpeedKt,
+      windDirDeg: h.windDirDeg,
+      northScore: h.sides?.north?.score ?? null,
+      southScore: h.sides?.south?.score ?? null,
+    });
+  }
+}
+
+// Build a Map<hourKey, entry> from the forecast log for past-hour lookups
+function loadForecastLog() {
+  const entries = readJsonl(FORECAST_LOG);
+  const map = new Map();
+  for (const e of entries) {
+    if (!map.has(e.hourKey)) map.set(e.hourKey, e); // keep first (earliest prediction)
+  }
+  return map;
+}
+
+// Trim forecast log: drop entries whose valid time is older than 7 days
+function pruneForecastLog() {
+  try {
+    const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+    const entries = readJsonl(FORECAST_LOG);
+    const kept = entries.filter(e => e.validTs > cutoff);
+    fs.writeFileSync(FORECAST_LOG, kept.map(r => JSON.stringify(r)).join('\n') + '\n');
+    forecastLoggedHours = new Set(kept.map(e => e.hourKey));
+    console.log(`[retention] forecast log: ${kept.length} entries`);
+  } catch (e) { console.error('[forecast prune]', e.message); }
+}
+
 function runRetentionPass() {
   try {
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -55,6 +107,7 @@ function runRetentionPass() {
     const rkb = fs.existsSync(REPORTS_LOG) ? (fs.statSync(REPORTS_LOG).size / 1024).toFixed(1) : '0';
     console.log(`[retention] conditions: ${kb} KB (${slimmed.length} entries), reports: ${rkb} KB`);
   } catch (e) { console.error('[retention]', e.message); }
+  pruneForecastLog();
 }
 
 let cache = { data: null, ts: 0 };
@@ -79,6 +132,7 @@ async function buildConditions() {
 
   const current = buoyData?.current;
   const history = buoyData?.history || [];
+  const recentHourly = buoyData?.recentHourly || [];
   const tideRateFtHr = tideData?.tideRateFtHr || 0;
 
   // Current glass scores for both sides
@@ -103,31 +157,74 @@ async function buildConditions() {
   const waterTempF = tideData?.waterTempF ?? sstF ?? null;
 
   // 48hr forecast — merge NWS wind with Open-Meteo marine
-  const forecastHours = nwsHours
-    .filter(h => h.ts > now && h.ts < now + 49 * 3600 * 1000)
-    .map(h => {
+  // Include last 12h of past hours so we can show forecast vs actual
+  // For past hours NWS no longer returns data; use stored forecast log instead
+  const storedForecast = loadForecastLog();
+
+  // Build a set of hour keys that NWS returned (for dedup vs stored)
+  const nwsHourKeys = new Set(nwsHours.map(h => Math.floor(h.ts / 3600000)));
+
+  // Synthetic past-hour entries from stored forecast log (last 12h, not in NWS response)
+  const pastHoursFromLog = [];
+  for (const [hourKey, entry] of storedForecast) {
+    if (entry.validTs > now - 12 * 3600 * 1000 && entry.validTs <= now && !nwsHourKeys.has(hourKey)) {
+      pastHoursFromLog.push({
+        ts: entry.validTs,
+        windSpeedKt: entry.windSpeedKt,
+        windDirDeg: entry.windDirDeg,
+        airTempF: null,
+        skyCover: null,
+        shortForecast: null,
+        _storedScores: { north: entry.northScore, south: entry.southScore },
+      });
+    }
+  }
+
+  const allHours = [
+    ...pastHoursFromLog,
+    ...nwsHours.filter(h => h.ts > now - 12 * 3600 * 1000 && h.ts < now + 49 * 3600 * 1000),
+  ].sort((a, b) => a.ts - b.ts);
+
+  const forecastHours = allHours.map(h => {
       // Find nearest marine data point
       const nearestMarine = marine.reduce((best, m) =>
         Math.abs(m.ts - h.ts) < Math.abs((best?.ts || Infinity) - h.ts) ? m : best, null);
 
-      const sides = {
-        north: computeGlassScore({
-          windSpeedKt: h.windSpeedKt,
-          windGustKt: h.windSpeedKt * 1.3, // NWS doesn't give gusts in hourly
-          windDirDeg: h.windDirDeg,
-          side: 'north',
-          windHistory: [],
-          tideRateFtHr: 0,
-        }),
-        south: computeGlassScore({
-          windSpeedKt: h.windSpeedKt,
-          windGustKt: h.windSpeedKt * 1.3,
-          windDirDeg: h.windDirDeg,
-          side: 'south',
-          windHistory: [],
-          tideRateFtHr: 0,
-        }),
-      };
+      const sides = h._storedScores
+        ? {
+            north: { score: h._storedScores.north, label: '' },
+            south: { score: h._storedScores.south, label: '' },
+          }
+        : {
+            north: computeGlassScore({
+              windSpeedKt: h.windSpeedKt,
+              windGustKt: h.windSpeedKt * 1.3,
+              windDirDeg: h.windDirDeg,
+              side: 'north',
+              windHistory: [],
+              tideRateFtHr: 0,
+            }),
+            south: computeGlassScore({
+              windSpeedKt: h.windSpeedKt,
+              windGustKt: h.windSpeedKt * 1.3,
+              windDirDeg: h.windDirDeg,
+              side: 'south',
+              windHistory: [],
+              tideRateFtHr: 0,
+            }),
+          };
+
+      // For past hours: find nearest buoy observation and compute actual score
+      let actual = null;
+      if (h.ts <= now) {
+        const nearestBuoy = recentHourly.reduce((best, b) =>
+          Math.abs(b.ts - h.ts) < Math.abs((best?.ts ?? Infinity) - h.ts) ? b : best, null);
+        if (nearestBuoy && Math.abs(nearestBuoy.ts - h.ts) < 2 * 3600 * 1000) {
+          const actualNorth = computeGlassScore({ windSpeedKt: nearestBuoy.speedKt, windGustKt: nearestBuoy.gustKt || nearestBuoy.speedKt * 1.2, windDirDeg: nearestBuoy.dirDeg, side: 'north', windHistory: [], tideRateFtHr: 0 });
+          const actualSouth = computeGlassScore({ windSpeedKt: nearestBuoy.speedKt, windGustKt: nearestBuoy.gustKt || nearestBuoy.speedKt * 1.2, windDirDeg: nearestBuoy.dirDeg, side: 'south', windHistory: [], tideRateFtHr: 0 });
+          actual = { north: { score: actualNorth.score }, south: { score: actualSouth.score }, windSpeedKt: nearestBuoy.speedKt, windDirDeg: nearestBuoy.dirDeg };
+        }
+      }
 
       return {
         time: h.ts,
@@ -139,8 +236,12 @@ async function buildConditions() {
         shortForecast: h.shortForecast,
         waveHeightFt: nearestMarine?.waveHeightM != null ? nearestMarine.waveHeightM * 3.281 : null,
         sides,
+        actual,
       };
     });
+
+  // Persist future NWS predictions we haven't stored yet
+  persistForecastHours(forecastHours.filter(h => h.time > now));
 
   const bestWindows = findBestWindows(forecastHours);
 

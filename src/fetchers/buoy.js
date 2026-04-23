@@ -51,5 +51,15 @@ export async function fetchBuoyData(fetchFn) {
     .filter(r => r.ts >= eightHoursAgo && r.speedKt !== null)
     .slice(0, 10);
 
-  return { current, history };
+  // Last 24h deduplicated to one obs per hour — for forecast vs actual comparison
+  const dayAgo = Date.now() - 24 * 3600 * 1000;
+  const hourlyMap = new Map();
+  for (const r of all) {
+    if (r.ts < dayAgo || r.speedKt === null || r.dirDeg === null) continue;
+    const hourKey = Math.floor(r.ts / 3600000); // truncate to hour
+    if (!hourlyMap.has(hourKey)) hourlyMap.set(hourKey, r); // file is newest-first, keep first = most recent in hour
+  }
+  const recentHourly = [...hourlyMap.values()].sort((a, b) => a.ts - b.ts);
+
+  return { current, history, recentHourly };
 }
