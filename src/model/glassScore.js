@@ -125,30 +125,30 @@ export function findBestWindows(forecastHours) {
       if (entry && entry.score >= MIN_SCORE) {
         streak.push(hour);
       } else {
-        if (streak.length >= MIN_DURATION) {
-          windows.push({
-            side,
-            start: streak[0].time,
-            end: streak[streak.length - 1].time,
-            score: Math.round(streak.reduce((s, h) => s + h.sides[side].score, 0) / streak.length),
-            airTempF: streak[0].airTempF,
-            skyCover: streak[0].skyCover,
-          });
-        }
+        if (streak.length >= MIN_DURATION) windows.push(makeWindow(side, streak));
         streak = [];
       }
     }
-    if (streak.length >= MIN_DURATION) {
-      windows.push({
-        side,
-        start: streak[0].time,
-        end: streak[streak.length - 1].time,
-        score: Math.round(streak.reduce((s, h) => s + h.sides[side].score, 0) / streak.length),
-        airTempF: streak[0].airTempF,
-        skyCover: streak[0].skyCover,
-      });
-    }
+    if (streak.length >= MIN_DURATION) windows.push(makeWindow(side, streak));
   }
 
   return windows.sort((a, b) => b.score - a.score || a.start - b.start);
+}
+
+function makeWindow(side, streak) {
+  const n = streak.length;
+  const avg = (fn) => streak.reduce((s, h) => s + fn(h), 0) / n;
+  const sideData = (h) => h.sides[side];
+  return {
+    side,
+    start: streak[0].time,
+    end: streak[n - 1].time,
+    score: Math.round(avg(h => sideData(h).score)),
+    airTempF: streak[0].airTempF,
+    skyCover: streak[0].skyCover,
+    avgWindKt: Math.round(avg(h => h.windSpeedKt || 0)),
+    avgWindDir: streak[Math.floor(n / 2)].windDirLabel || '',
+    avgFetchKm: parseFloat((avg(h => (sideData(h).fetch || 0) / 1000)).toFixed(1)),
+    avgHsFt: parseFloat((avg(h => (sideData(h).Hs || 0) * 3.281)).toFixed(2)),
+  };
 }

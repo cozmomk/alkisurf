@@ -85,9 +85,9 @@ function WindowPair({ north, south }) {
   const isToday = fmt(ref.start, { day: 'numeric' }) === fmt(Date.now(), { day: 'numeric' });
   const isTomorrow = fmt(ref.start, { day: 'numeric' }) === fmt(Date.now() + 86400000, { day: 'numeric' });
 
-  const betterSide = north && south
-    ? (north.score >= south.score ? 'north' : 'south')
-    : north ? 'north' : 'south';
+  const betterSide = north && south && north.score !== south.score
+    ? (north.score > south.score ? 'north' : 'south')
+    : null;
 
   return (
     <div className="card px-4 py-3 flex flex-col gap-2">
@@ -113,10 +113,15 @@ function WindowPair({ north, south }) {
       {/* Side-by-side comparison */}
       <div className="grid grid-cols-2 gap-2">
         {[
-          { label: 'North', sub: 'Elliott Bay', w: north },
-          { label: 'South', sub: 'Open Sound', w: south },
-        ].map(({ label, sub, w }) => {
-          const isBetter = (label === 'North' ? 'north' : 'south') === betterSide && north && south;
+          { label: 'North', sub: 'Elliott Bay', sideKey: 'north', w: north },
+          { label: 'South', sub: 'Open Sound', sideKey: 'south', w: south },
+        ].map(({ label, sub, sideKey, w }) => {
+          const isBetter = betterSide === sideKey;
+          const fetchKm = w?.avgFetchKm;
+          const HsFt = w?.avgHsFt;
+          const exposure = fetchKm != null
+            ? fetchKm < 1 ? 'sheltered' : fetchKm < 4 ? 'semi-exposed' : 'exposed'
+            : null;
           return (
             <div key={label} className="flex items-center gap-2 rounded-lg p-2"
               style={{
@@ -124,12 +129,27 @@ function WindowPair({ north, south }) {
                 border: `1px solid ${isBetter ? 'rgba(0, 232, 135, 0.18)' : 'rgba(255,255,255,0.05)'}`,
               }}>
               <ScoreBubble score={w?.score ?? null} />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] font-bold" style={{ color: '#e2eef7' }}>{label}</span>
                   {isBetter && <span style={{ color: '#00e887', fontSize: 9 }}>▲</span>}
                 </div>
                 <span className="text-[9px]" style={{ color: '#5a7fa0' }}>{sub}</span>
+                {w && (
+                  <div className="flex gap-1.5 mt-0.5 flex-wrap">
+                    {fetchKm != null && (
+                      <span className="text-[8px] px-1 rounded" style={{
+                        color: fetchKm < 1 ? '#00e887' : fetchKm < 4 ? '#ffc300' : '#ff6b1a',
+                        background: 'rgba(255,255,255,0.05)',
+                      }}>{fetchKm < 1 ? `${Math.round(fetchKm * 1000)}m` : `${fetchKm}km`} fetch · {exposure}</span>
+                    )}
+                    {HsFt != null && HsFt > 0.05 && (
+                      <span className="text-[8px] px-1 rounded" style={{ color: '#4a6a88', background: 'rgba(255,255,255,0.05)' }}>
+                        {HsFt.toFixed(2)}ft swell
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );
