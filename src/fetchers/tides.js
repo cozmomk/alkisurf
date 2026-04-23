@@ -1,0 +1,63 @@
+// NOAA Tides & Currents — Station 9447130 (Seattle)
+// Fetches: current water level + 48hr predictions
+
+const BASE = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter';
+const STATION = '9447130';
+
+function params(extra) {
+  return new URLSearchParams({
+    station: STATION,
+    datum: 'MLLW',
+    time_zone: 'lst_ldt',
+    units: 'english',
+    application: 'alkisurf',
+    format: 'json',
+    ...extra,
+  }).toString();
+}
+
+function nowStr() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+}
+
+export async function fetchTideData(fetchFn) {
+  const [levelRes, predRes, hiloRes] = await Promise.all([
+    fetchFn(`${BASE}?${params({ product: 'water_level', date: 'latest' })}`, { signal: AbortSignal.timeout(8000) }),
+    fetchFn(`${BASE}?${params({ product: 'predictions', begin_date: nowStr(), range: 52, interval: 'h' })}`, { signal: AbortSignal.timeout(8000) }),
+    fetchFn(`${BASE}?${params({ product: 'predictions', begin_date: nowStr(), range: 52, interval: 'hilo' })}`, { signal: AbortSignal.timeout(8000) }),
+  ]);
+
+  const [levelJson, predJson, hiloJson] = await Promise.all([
+    levelRes.json(), predRes.json(), hiloRes.json()
+  ]);
+
+  // Current water level
+  const levelData = levelJson.data?.[0];
+  const currentFt = levelData ? parseFloat(levelData.v) : null;
+
+  // Hourly predictions for the next 48h
+  const hourly = (predJson.predictions || []).map(p => ({
+    ts: new Date(p.t).getTime(),
+    ft: parseFloat(p.v),
+  }));
+
+  // Hi/lo events
+  const hilos = (hiloJson.predictions || []).map(p => ({
+    ts: new Date(p.t).getTime(),
+    ft: parseFloat(p.v),
+    type: p.type, // H or L
+  }));
+
+  // Tide rate: ft/hr estimated from adjacent predictions
+  let tideRateFtHr = 0;
+  if (hourly.length >= 2) {
+    tideRateFtHr = hourly[1].ft - hourly[0].ft; // ft per hour
+  }
+
+  // Rising or falling
+  const tideDirection = tideRateFtHr > 0.05 ? 'rising' : tideRateFtHr < -0.05 ? 'falling' : 'slack';
+
+  return { currentFt, tideRateFtHr, tideDirection, hourly, hilos };
+}

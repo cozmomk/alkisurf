@@ -1,0 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #060d1f;
+  --surface: #0d1b35;
+  --border: rgba(255,255,255,0.07);
+  --text: #e2eef7;
+  --muted: #5a7fa0;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+.card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+}
+
+.score-glow-glass   { text-shadow: 0 0 30px #00e887, 0 0 60px #00e88744; }
+.score-glow-ripple  { text-shadow: 0 0 30px #7dff4f, 0 0 60px #7dff4f44; }
+.score-glow-chop    { text-shadow: 0 0 30px #ffc300, 0 0 60px #ffc30044; }
+.score-glow-rough   { text-shadow: 0 0 30px #ff6b1a, 0 0 60px #ff6b1a44; }
+.score-glow-nogo    { text-shadow: 0 0 30px #ff2b55, 0 0 60px #ff2b5544; }
+
+/* Wave animation background */
+.wave-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(ellipse at 20% 80%, rgba(0, 80, 160, 0.12) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 20%, rgba(0, 40, 100, 0.10) 0%, transparent 60%);
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { height: 4px; width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+/* Forecast strip */
+.forecast-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scroll-snap-type: x mandatory;
+}
+.forecast-cell {
+  flex: 0 0 64px;
+  scroll-snap-align: start;
+}
+
+/* Tide line */
+.tide-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #00e887;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
