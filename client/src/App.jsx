@@ -5,7 +5,6 @@ import ForecastStrip from './components/ForecastStrip.jsx';
 import BestWindows from './components/BestWindows.jsx';
 import WebcamPanel from './components/WebcamPanel.jsx';
 import InstallNudge from './components/InstallNudge.jsx';
-import FeedbackPrompt from './components/FeedbackPrompt.jsx';
 import ReportButton from './components/ReportButton.jsx';
 import ConditionsSprite from './components/ConditionsSprite.jsx';
 
@@ -207,9 +206,6 @@ export default function App() {
         {data?.bestWindows?.length > 0 && (
           <BestWindows windows={data.bestWindows} />
         )}
-
-        {/* Session feedback */}
-        <FeedbackPrompt current={current} />
 
         {/* Data sources footer */}
         {data?.sources && (
