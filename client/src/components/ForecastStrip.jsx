@@ -1,4 +1,4 @@
-import { scoreColor } from '../utils.js';
+import { scoreColor, compassLabel } from '../utils.js';
 
 function fmt(ts, opts) {
   return new Date(ts).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', ...opts });
@@ -25,10 +25,12 @@ function Cell({ hour, side }) {
   const { score } = sideData;
   const color = scoreColor(score);
   const hour12 = fmt(hour.time, { hour: 'numeric', hour12: true });
+  const windDir = hour.windDirDeg != null ? compassLabel(hour.windDirDeg) : '';
+  const swellFt = hour.waveHeightFt != null ? hour.waveHeightFt.toFixed(1) : null;
 
   return (
-    <div className="forecast-cell card flex flex-col items-center gap-1.5 p-2"
-      style={{ borderTop: `3px solid ${color}` }}>
+    <div className="forecast-cell card flex flex-col items-center gap-1 p-2"
+      style={{ borderTop: `3px solid ${color}`, minWidth: 56 }}>
       <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: '#5a7fa0' }}>
         {hour12}
       </span>
@@ -40,8 +42,13 @@ function Cell({ hour, side }) {
         {sideData.label?.split(' ')[0]}
       </span>
       {hour.windSpeedKt != null && (
-        <span className="text-[10px]" style={{ color: '#4a6a88' }}>
-          {Math.round(hour.windSpeedKt)}kt
+        <span className="text-[9px] whitespace-nowrap" style={{ color: '#4a6a88' }}>
+          {Math.round(hour.windSpeedKt)}kt {windDir}
+        </span>
+      )}
+      {swellFt != null && (
+        <span className="text-[9px] whitespace-nowrap" style={{ color: '#3a5a70' }}>
+          {swellFt}ft
         </span>
       )}
     </div>

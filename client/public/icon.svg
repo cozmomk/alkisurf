@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="100" fill="#060d1f"/>
+  <!-- Wave -->
+  <path d="M60 310 Q130 270 200 310 Q270 350 340 310 Q410 270 452 300" stroke="#4fc3f7" stroke-width="18" fill="none" stroke-linecap="round"/>
+  <path d="M60 360 Q130 320 200 360 Q270 400 340 360 Q410 320 452 350" stroke="#00e887" stroke-width="14" fill="none" stroke-linecap="round" opacity="0.7"/>
+  <!-- Paddle board + person simplified -->
+  <ellipse cx="256" cy="240" rx="110" ry="22" fill="#e2eef7" opacity="0.9"/>
+  <circle cx="256" cy="190" r="28" fill="#e2eef7"/>
+  <line x1="256" y1="218" x2="256" y2="310" stroke="#e2eef7" stroke-width="10" stroke-linecap="round"/>
+  <!-- Paddle -->
+  <line x1="210" y1="230" x2="300" y2="270" stroke="#4fc3f7" stroke-width="8" stroke-linecap="round"/>
+  <ellipse cx="302" cy="272" rx="12" ry="20" fill="#4fc3f7" transform="rotate(-30 302 272)"/>
+</svg>

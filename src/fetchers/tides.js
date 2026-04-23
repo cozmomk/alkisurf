@@ -1,8 +1,10 @@
-// NOAA Tides & Currents — Station 9447130 (Seattle)
-// Fetches: current water level + 48hr predictions
+// NOAA Tides & Currents
+// Station 9447130 (Seattle): water level + predictions
+// Station 9446484 (Tacoma): water temperature (Seattle station has no temp sensor)
 
 const BASE = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter';
 const STATION = '9447130';
+const WTEMP_STATION = '9446484'; // Tacoma — same body of water, has temp sensor
 
 function params(extra) {
   return new URLSearchParams({
@@ -16,6 +18,19 @@ function params(extra) {
   }).toString();
 }
 
+function wtempParams() {
+  return new URLSearchParams({
+    station: WTEMP_STATION,
+    datum: 'MLLW',
+    time_zone: 'lst_ldt',
+    units: 'english',
+    application: 'alkisurf',
+    format: 'json',
+    product: 'water_temperature',
+    date: 'latest',
+  }).toString();
+}
+
 function nowStr() {
   const d = new Date();
   const pad = n => String(n).padStart(2, '0');
@@ -23,14 +38,15 @@ function nowStr() {
 }
 
 export async function fetchTideData(fetchFn) {
-  const [levelRes, predRes, hiloRes] = await Promise.all([
+  const [levelRes, predRes, hiloRes, wtempRes] = await Promise.all([
     fetchFn(`${BASE}?${params({ product: 'water_level', date: 'latest' })}`, { signal: AbortSignal.timeout(8000) }),
     fetchFn(`${BASE}?${params({ product: 'predictions', begin_date: nowStr(), range: 52, interval: 'h' })}`, { signal: AbortSignal.timeout(8000) }),
     fetchFn(`${BASE}?${params({ product: 'predictions', begin_date: nowStr(), range: 52, interval: 'hilo' })}`, { signal: AbortSignal.timeout(8000) }),
+    fetchFn(`${BASE}?${wtempParams()}`, { signal: AbortSignal.timeout(8000) }),
   ]);
 
-  const [levelJson, predJson, hiloJson] = await Promise.all([
-    levelRes.json(), predRes.json(), hiloRes.json()
+  const [levelJson, predJson, hiloJson, wtempJson] = await Promise.all([
+    levelRes.json(), predRes.json(), hiloRes.json(), wtempRes.json()
   ]);
 
   // Current water level
@@ -59,5 +75,9 @@ export async function fetchTideData(fetchFn) {
   // Rising or falling
   const tideDirection = tideRateFtHr > 0.05 ? 'rising' : tideRateFtHr < -0.05 ? 'falling' : 'slack';
 
-  return { currentFt, tideRateFtHr, tideDirection, hourly, hilos };
+  // Water temperature (°F, measured at Tacoma station — closest Puget Sound sensor)
+  const wtempData = wtempJson.data?.[0];
+  const waterTempF = wtempData ? parseFloat(wtempData.v) : null;
+
+  return { currentFt, tideRateFtHr, tideDirection, hourly, hilos, waterTempF };
 }

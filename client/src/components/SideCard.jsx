@@ -1,4 +1,4 @@
-import { scoreColor } from '../utils.js';
+import { scoreColor, compassLabel } from '../utils.js';
 
 const SCORE_GLOW = {
   GLASS: 'score-glow-glass',
@@ -9,27 +9,14 @@ const SCORE_GLOW = {
   'NO GO': 'score-glow-nogo',
 };
 
-function WindArrow({ deg }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" style={{ transform: `rotate(${deg}deg)` }}>
-      <line x1="10" y1="16" x2="10" y2="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-      <polyline points="6,8 10,4 14,8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
 function ScoreRing({ score, color }) {
-  const radius = 54;
-  const circ = 2 * Math.PI * radius;
+  const r = 38;
+  const circ = 2 * Math.PI * r;
   const dash = (score / 10) * circ;
   return (
-    <svg width="140" height="140" viewBox="0 0 140 140">
-      <circle cx="70" cy="70" r={radius} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8"/>
-      <circle
-        cx="70" cy="70" r={radius}
-        fill="none"
-        stroke={color}
-        strokeWidth="8"
+    <svg width="96" height="96" viewBox="0 0 96 96">
+      <circle cx="48" cy="48" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="7"/>
+      <circle cx="48" cy="48" r={r} fill="none" stroke={color} strokeWidth="7"
         strokeLinecap="round"
         strokeDasharray={`${dash} ${circ}`}
         strokeDashoffset={circ * 0.25}
@@ -39,66 +26,123 @@ function ScoreRing({ score, color }) {
   );
 }
 
+function SwellBar({ Hs }) {
+  const htFt = Hs != null ? Hs * 3.281 : 0;
+  // thresholds: 0.15, 0.4, 0.7, 1.1 ft
+  const filled = htFt < 0.15 ? 0 : htFt < 0.4 ? 1 : htFt < 0.7 ? 2 : htFt < 1.1 ? 3 : 4;
+  const segColors = ['#00e887', '#7dff4f', '#ffc300', '#ff6b1a', '#ff2b55'];
+  return (
+    <div className="flex gap-0.5">
+      {[0, 1, 2, 3, 4].map(i => (
+        <div key={i} style={{
+          flex: 1, height: 5, borderRadius: 2,
+          background: i <= filled && htFt > 0.01 ? segColors[i] : 'rgba(255,255,255,0.10)',
+        }} />
+      ))}
+    </div>
+  );
+}
+
+function fetchLabel(fetchM) {
+  if (fetchM == null) return '—';
+  if (fetchM < 1000) return 'Protected';
+  if (fetchM < 4000) return 'Low';
+  if (fetchM < 9000) return 'Moderate';
+  return 'Exposed';
+}
+
+function fetchColor(fetchM) {
+  if (fetchM == null) return '#5a7fa0';
+  if (fetchM < 1000) return '#00e887';
+  if (fetchM < 4000) return '#7dff4f';
+  if (fetchM < 9000) return '#ffc300';
+  return '#ff6b1a';
+}
+
 export default function SideCard({ side, data, windDirDeg }) {
   if (!data) return null;
-  const { score, label, Hs } = data;
+  const { score, label, Hs, windEff, fetch: fetchM } = data;
   const color = scoreColor(score);
   const glowClass = SCORE_GLOW[label] || '';
-  const htFt = Hs != null ? (Hs * 3.281).toFixed(1) : '—';
+  const htFt = Hs != null ? (Hs * 3.281).toFixed(2) : '—';
 
   return (
-    <div className="card p-5 flex flex-col gap-3 flex-1 min-w-0">
+    <div className="card p-4 flex flex-col gap-3 flex-1 min-w-0">
       {/* Side label */}
-      <div className="flex flex-col gap-0.5">
-        <span className="text-xs font-bold tracking-widest uppercase whitespace-nowrap" style={{ color: '#e2eef7' }}>
+      <div>
+        <div className="text-[11px] font-bold tracking-widest uppercase" style={{ color: '#e2eef7' }}>
           {side === 'north' ? 'North Side' : 'South Side'}
-        </span>
-        <span className="text-[10px]" style={{ color: '#5a7fa0' }}>
+        </div>
+        <div className="text-[10px]" style={{ color: '#5a7fa0' }}>
           {side === 'north' ? 'Elliott Bay' : 'Open Sound'}
+        </div>
+      </div>
+
+      {/* Score ring centered */}
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="relative" style={{ width: 96, height: 96 }}>
+          <ScoreRing score={score} color={color} />
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className={`text-3xl font-black leading-none ${glowClass}`} style={{ color }}>
+              {score}
+            </span>
+            <span className="text-[9px] font-bold tracking-widest" style={{ color: '#5a7fa0' }}>/ 10</span>
+          </div>
+        </div>
+        <span className="text-[11px] font-bold tracking-wide text-center leading-tight" style={{ color }}>
+          {label}
         </span>
       </div>
 
-      {/* Score ring + number */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-shrink-0" style={{ width: 140, height: 140 }}>
-          <ScoreRing score={score} color={color} />
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span
-              className={`text-5xl font-black leading-none ${glowClass}`}
-              style={{ color }}
-            >
-              {score}
-            </span>
-            <span className="text-[10px] font-bold tracking-widest mt-1" style={{ color: '#5a7fa0' }}>
-              / 10
-            </span>
-          </div>
+      {/* Swell bar */}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px]" style={{ color: '#5a7fa0' }}>Swell</span>
+          <span className="text-[10px] font-semibold" style={{ color: '#c8dff0' }}>{htFt} ft</span>
         </div>
+        <SwellBar Hs={Hs} />
+      </div>
 
-        {/* Label + metrics */}
-        <div className="flex flex-col gap-2 flex-1 min-w-0">
-          <span className="text-base font-bold tracking-wide" style={{ color }}>
-            {label}
-          </span>
-          <div className="flex flex-col gap-1.5">
-            <Metric label="Wave ht" value={`${htFt} ft`} />
-            <Metric label="Wind dir" value={
-              <span className="flex items-center gap-1">
-                <WindArrow deg={windDirDeg || 0} />
-              </span>
-            } />
-          </div>
-        </div>
+      {/* Divider */}
+      <div style={{ height: 1, background: 'rgba(255,255,255,0.06)' }} />
+
+      {/* Metrics */}
+      <div className="flex flex-col gap-1.5">
+        <MetricRow
+          label="Exposure"
+          value={<span style={{ color: fetchColor(fetchM) }}>{fetchLabel(fetchM)}</span>}
+        />
+        <MetricRow
+          label="Fetch"
+          value={fetchM != null ? `${(fetchM / 1000).toFixed(1)} km` : '—'}
+        />
+        <MetricRow
+          label="Eff wind"
+          value={windEff != null ? `${windEff.toFixed(1)} kt` : '—'}
+        />
+        <MetricRow
+          label="Wind dir"
+          value={
+            <span className="flex items-center gap-1">
+              <svg width="11" height="11" viewBox="0 0 20 20"
+                style={{ transform: `rotate(${windDirDeg || 0}deg)`, flexShrink: 0 }}>
+                <line x1="10" y1="16" x2="10" y2="4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+                <polyline points="6,8 10,4 14,8" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              from {compassLabel(windDirDeg || 0)}
+            </span>
+          }
+        />
       </div>
     </div>
   );
 }
 
-function Metric({ label, value }) {
+function MetricRow({ label, value }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-xs" style={{ color: '#5a7fa0' }}>{label}</span>
-      <span className="text-xs font-semibold" style={{ color: '#c8dff0' }}>{value}</span>
+    <div className="flex items-center justify-between gap-1">
+      <span className="text-[10px]" style={{ color: '#5a7fa0' }}>{label}</span>
+      <span className="text-[10px] font-semibold" style={{ color: '#c8dff0' }}>{value}</span>
     </div>
   );
 }

@@ -54,8 +54,14 @@ async function buildConditions() {
     south: computeGlassScore({ ...scoreParams, side: 'south' }),
   } : null;
 
-  // 48hr forecast — merge NWS wind with Open-Meteo marine
+  // Water temp: prefer NOAA measured, fall back to Open-Meteo SST (modeled, °C → °F)
   const now = Date.now();
+  const nearestMarineNow = marine.reduce((best, m) =>
+    Math.abs(m.ts - now) < Math.abs((best?.ts ?? Infinity) - now) ? m : best, null);
+  const sstF = nearestMarineNow?.sstC != null ? nearestMarineNow.sstC * 9/5 + 32 : null;
+  const waterTempF = tideData?.waterTempF ?? sstF ?? null;
+
+  // 48hr forecast — merge NWS wind with Open-Meteo marine
   const forecastHours = nwsHours
     .filter(h => h.ts > now && h.ts < now + 49 * 3600 * 1000)
     .map(h => {
@@ -115,7 +121,7 @@ async function buildConditions() {
       windGustKt: current.gustKt,
       windDirDeg: current.dirDeg,
       windDirLabel: compassLabel(current.dirDeg),
-      waterTempF: current.waterTempF,
+      waterTempF,
       airTempF: current.airTempF,
       tideCurrentFt: tideData?.currentFt,
       tideDirection: tideData?.tideDirection,
@@ -154,6 +160,31 @@ app.get('/api/refresh', async (req, res) => {
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Webcam proxy — bypasses hotlink protection, caches 30s
+let webcamCache = { buf: null, contentType: null, ts: 0 };
+app.get('/api/webcam', async (req, res) => {
+  try {
+    if (webcamCache.buf && Date.now() - webcamCache.ts < 30000) {
+      res.set('Content-Type', webcamCache.contentType);
+      res.set('Cache-Control', 'public, max-age=30');
+      return res.send(webcamCache.buf);
+    }
+    const img = await fetch('https://www.alkiweather.com/wxalkiwebcam.php', {
+      headers: { Referer: 'https://www.alkiweather.com/', 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!img.ok) return res.status(502).json({ error: 'Camera unavailable' });
+    const contentType = img.headers.get('Content-Type') || 'image/jpeg';
+    const buf = Buffer.from(await img.arrayBuffer());
+    webcamCache = { buf, contentType, ts: Date.now() };
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'public, max-age=30');
+    res.send(buf);
+  } catch (err) {
+    res.status(502).json({ error: 'Camera unavailable' });
   }
 });
 

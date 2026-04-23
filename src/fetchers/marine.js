@@ -11,6 +11,7 @@ const VARS = [
   'wave_period',
   'wind_wave_height',
   'wind_wave_direction',
+  'sea_surface_temperature',
 ].join(',');
 
 export async function fetchMarineData(fetchFn) {
@@ -29,5 +30,6 @@ export async function fetchMarineData(fetchFn) {
     wavePeriodS: h.wave_period?.[i] ?? null,
     windWaveHeightM: h.wind_wave_height?.[i] ?? null,
     windWaveDirDeg: h.wind_wave_direction?.[i] ?? null,
+    sstC: h.sea_surface_temperature?.[i] ?? null,
   }));
 }

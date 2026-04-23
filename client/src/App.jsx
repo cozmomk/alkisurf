@@ -3,6 +3,9 @@ import SideCard from './components/SideCard.jsx';
 import ConditionsBar from './components/ConditionsBar.jsx';
 import ForecastStrip from './components/ForecastStrip.jsx';
 import BestWindows from './components/BestWindows.jsx';
+import WebcamPanel from './components/WebcamPanel.jsx';
+import InstallNudge from './components/InstallNudge.jsx';
+import FeedbackPrompt from './components/FeedbackPrompt.jsx';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 const POLL_MS = 5 * 60 * 1000; // 5 minutes
@@ -97,6 +100,9 @@ export default function App() {
           </div>
         </header>
 
+        {/* iOS install nudge */}
+        <InstallNudge />
+
         {/* Error state */}
         {error && (
           <div className="card px-4 py-3 text-sm" style={{ color: '#ff6b1a', borderColor: '#ff6b1a44' }}>
@@ -146,6 +152,9 @@ export default function App() {
           </div>
         )}
 
+        {/* Webcam visual check */}
+        <WebcamPanel />
+
         {/* Forecast strip with side toggle */}
         {data?.forecast?.length > 0 && (
           <div className="card p-4">
@@ -178,6 +187,9 @@ export default function App() {
         {data?.bestWindows?.length > 0 && (
           <BestWindows windows={data.bestWindows} />
         )}
+
+        {/* Session feedback */}
+        <FeedbackPrompt current={current} />
 
         {/* Data sources footer */}
         {data?.sources && (
