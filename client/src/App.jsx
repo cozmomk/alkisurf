@@ -6,6 +6,7 @@ import BestWindows from './components/BestWindows.jsx';
 import WebcamPanel from './components/WebcamPanel.jsx';
 import InstallNudge from './components/InstallNudge.jsx';
 import FeedbackPrompt from './components/FeedbackPrompt.jsx';
+import ReportButton from './components/ReportButton.jsx';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 const POLL_MS = 5 * 60 * 1000; // 5 minutes
@@ -18,12 +19,21 @@ function timeAgo(ts) {
   return `${Math.floor(diff / 3600)}h ago`;
 }
 
+const SOURCE_URLS = {
+  'NDBC buoy':    'https://www.ndbc.noaa.gov/station_page.php?station=wpow1',
+  'NOAA tides':   'https://tidesandcurrents.noaa.gov/stationhome.html?id=9447130',
+  'NWS forecast': 'https://marine.weather.gov/MapClick.php?zoneid=PZZ131',
+  'Open-Meteo':   'https://open-meteo.com/en/docs/marine-weather-api',
+};
+
 function SourceBadge({ ok, label }) {
+  const href = SOURCE_URLS[label];
   return (
-    <span className="flex items-center gap-1 text-[10px]"
-      style={{ color: ok ? '#00e887' : '#ff2b55' }}>
+    <a href={href} target="_blank" rel="noopener noreferrer"
+      className="flex items-center gap-1 text-[10px] transition-opacity hover:opacity-70"
+      style={{ color: ok ? '#00e887' : '#ff2b55', textDecoration: 'none' }}>
       <span style={{ fontSize: 8 }}>{ok ? '●' : '○'}</span>{label}
-    </span>
+    </a>
   );
 }
 
@@ -199,6 +209,7 @@ export default function App() {
             <SourceBadge ok={data.sources.tides} label="NOAA tides" />
             <SourceBadge ok={data.sources.nws} label="NWS forecast" />
             <SourceBadge ok={data.sources.marine} label="Open-Meteo" />
+            <span style={{ marginLeft: 'auto' }}><ReportButton /></span>
           </div>
         )}
 

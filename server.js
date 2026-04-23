@@ -2,6 +2,7 @@ import express from 'express';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import fs from 'fs';
 import fetch from 'node-fetch';
 
 import { fetchBuoyData } from './src/fetchers/buoy.js';
@@ -13,8 +14,48 @@ import { compassLabel } from './src/model/fetchGeometry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+app.use(express.json());
 const PORT = process.env.PORT || 3001;
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+// Persistent data dir — Railway volume at /data, fallback to local
+const DATA_DIR = fs.existsSync('/data') ? '/data' : path.join(__dirname, '.data');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const CONDITIONS_LOG = path.join(DATA_DIR, 'conditions-log.jsonl');
+const REPORTS_LOG    = path.join(DATA_DIR, 'reports.jsonl');
+
+function appendJsonl(file, obj) {
+  try { fs.appendFileSync(file, JSON.stringify(obj) + '\n'); } catch (e) { console.error('appendJsonl', e.message); }
+}
+
+function readJsonl(file) {
+  if (!fs.existsSync(file)) return [];
+  return fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(l => {
+    try { return JSON.parse(l); } catch { return null; }
+  }).filter(Boolean);
+}
+
+// Slim entries older than 30 days: drop derived fields, keep validation essentials
+function slimEntry(entry) {
+  const { ts, windSpeedKt, windDirDeg, waterTempF } = entry;
+  const slim = { ts, windSpeedKt, windDirDeg, waterTempF };
+  for (const side of ['north', 'south']) {
+    if (entry[side]) slim[side] = { score: entry[side].score };
+  }
+  return slim;
+}
+
+function runRetentionPass() {
+  try {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const rows = readJsonl(CONDITIONS_LOG);
+    const slimmed = rows.map(r => r.ts < cutoff ? slimEntry(r) : r);
+    fs.writeFileSync(CONDITIONS_LOG, slimmed.map(r => JSON.stringify(r)).join('\n') + '\n');
+    const kb = (fs.statSync(CONDITIONS_LOG).size / 1024).toFixed(1);
+    const rkb = fs.existsSync(REPORTS_LOG) ? (fs.statSync(REPORTS_LOG).size / 1024).toFixed(1) : '0';
+    console.log(`[retention] conditions: ${kb} KB (${slimmed.length} entries), reports: ${rkb} KB`);
+  } catch (e) { console.error('[retention]', e.message); }
+}
 
 let cache = { data: null, ts: 0 };
 
@@ -188,6 +229,81 @@ app.get('/api/webcam', async (req, res) => {
   }
 });
 
+// GET /api/insights — model accuracy from user reports vs predicted scores
+app.get('/api/insights', (req, res) => {
+  try {
+    const reports = readJsonl(REPORTS_LOG);
+    if (!reports.length) return res.json({ totalReports: 0, accuracy: null });
+
+    const RATING_SCORE = { glass: 9, ripple: 7, chop: 5, rough: 3, nogo: 0 };
+    const buckets = {}; // predicted score bucket → { reported, count }
+
+    for (const r of reports) {
+      const north = r.conditions?.scores?.north?.score;
+      const south = r.conditions?.scores?.south?.score;
+      const predicted = r.side === 'north' ? north : r.side === 'south' ? south : (north != null && south != null ? Math.round((north + south) / 2) : null);
+      if (predicted == null || RATING_SCORE[r.rating] == null) continue;
+      const bucket = Math.floor(predicted / 2) * 2; // group into 0,2,4,6,8,10
+      if (!buckets[bucket]) buckets[bucket] = { predicted: bucket, reported: [], count: 0 };
+      buckets[bucket].reported.push(RATING_SCORE[r.rating]);
+      buckets[bucket].count++;
+    }
+
+    const breakdown = Object.values(buckets).map(b => ({
+      predictedBucket: b.predicted,
+      avgReported: Math.round(b.reported.reduce((a, v) => a + v, 0) / b.count),
+      count: b.count,
+    })).sort((a, b) => a.predictedBucket - b.predictedBucket);
+
+    const errors = breakdown.map(b => Math.abs(b.predictedBucket - b.avgReported));
+    const mae = errors.length ? (errors.reduce((a, v) => a + v, 0) / errors.length).toFixed(1) : null;
+
+    res.json({ totalReports: reports.length, meanAbsoluteError: mae, breakdown });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/report — user-submitted condition report
+app.post('/api/report', (req, res) => {
+  const { rating, side, note } = req.body || {};
+  if (!rating) return res.status(400).json({ error: 'rating required' });
+  const entry = {
+    ts: Date.now(),
+    rating,           // 'glass' | 'ripple' | 'chop' | 'rough' | 'nogo'
+    side: side || 'both',
+    note: (note || '').slice(0, 280),
+    conditions: cache.data?.current ?? null,
+  };
+  appendJsonl(REPORTS_LOG, entry);
+  res.json({ ok: true });
+});
+
+// GET /api/history — last N logged snapshots
+app.get('/api/history', (req, res) => {
+  try {
+    const n = Math.min(parseInt(req.query.n) || 48, 200);
+    if (!fs.existsSync(CONDITIONS_LOG)) return res.json([]);
+    const lines = fs.readFileSync(CONDITIONS_LOG, 'utf8').trim().split('\n').filter(Boolean);
+    const rows = lines.slice(-n).map(l => JSON.parse(l));
+    res.json(rows);
+  } catch { res.json([]); }
+});
+
+// Hourly conditions snapshot
+function logConditionsSnapshot() {
+  if (!cache.data) return;
+  const { updatedAt, current } = cache.data;
+  if (!current) return;
+  appendJsonl(CONDITIONS_LOG, {
+    ts: updatedAt,
+    windSpeedKt: current.windSpeedKt,
+    windDirDeg: current.windDirDeg,
+    waterTempF: current.waterTempF,
+    north: current.scores?.north ?? null,
+    south: current.scores?.south ?? null,
+  });
+}
+setInterval(logConditionsSnapshot, 60 * 60 * 1000); // every hour
+
 // Serve built client in production
 app.use(express.static(path.join(__dirname, 'client/dist')));
 app.get('*', (req, res) => {
@@ -199,4 +315,8 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`alkisurf running on http://localhost:${PORT}`);
+  console.log(`[data] storing logs in ${DATA_DIR}`);
+  // Run retention on boot, then weekly
+  runRetentionPass();
+  setInterval(runRetentionPass, 7 * 24 * 60 * 60 * 1000);
 });
