@@ -7,6 +7,7 @@ import WebcamPanel from './components/WebcamPanel.jsx';
 import InstallNudge from './components/InstallNudge.jsx';
 import FeedbackPrompt from './components/FeedbackPrompt.jsx';
 import ReportButton from './components/ReportButton.jsx';
+import ConditionsSprite from './components/ConditionsSprite.jsx';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 const POLL_MS = 5 * 60 * 1000; // 5 minutes
@@ -153,6 +154,15 @@ export default function App() {
 
         {/* Conditions bar */}
         <ConditionsBar current={current} nextHilos={data?.nextHilos} />
+
+        {/* Animated conditions sprite */}
+        {scores && (
+          <ConditionsSprite
+            score={Math.max(scores.north.score, scores.south.score)}
+            windSpeedKt={current?.windSpeedKt}
+            skyCover={data?.forecast?.[0]?.skyCover ?? null}
+          />
+        )}
 
         {/* Side cards */}
         {scores && (
