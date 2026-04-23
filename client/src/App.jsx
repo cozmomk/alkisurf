@@ -207,6 +207,9 @@ export default function App() {
           <BestWindows windows={data.bestWindows} />
         )}
 
+        {/* Report button */}
+        <ReportButton />
+
         {/* Data sources footer */}
         {data?.sources && (
           <div className="flex items-center gap-3 flex-wrap px-1">
@@ -215,7 +218,6 @@ export default function App() {
             <SourceBadge ok={data.sources.tides} label="NOAA tides" />
             <SourceBadge ok={data.sources.nws} label="NWS forecast" />
             <SourceBadge ok={data.sources.marine} label="Open-Meteo" />
-            <span style={{ marginLeft: 'auto' }}><ReportButton /></span>
           </div>
         )}
 

@@ -41,9 +41,14 @@ export default function ReportButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-[10px] flex items-center gap-1 transition-opacity hover:opacity-70"
-        style={{ color: '#3a5a70', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-        <span style={{ fontSize: 10 }}>📋</span> Report conditions
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
+        style={{
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.10)',
+          color: '#5a7fa0',
+          cursor: 'pointer',
+        }}>
+        <span style={{ fontSize: 14 }}>📋</span> Report conditions
       </button>
 
       {open && (
