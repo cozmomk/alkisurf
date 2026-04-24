@@ -125,7 +125,7 @@ export default function SideCard({ side, data, windDirDeg }) {
           value={
             <span className="flex items-center gap-1">
               <svg width="11" height="11" viewBox="0 0 20 20"
-                style={{ transform: `rotate(${windDirDeg || 0}deg)`, flexShrink: 0 }}>
+                style={{ transform: `rotate(${(windDirDeg || 0) + 180}deg)`, flexShrink: 0 }}>
                 <line x1="10" y1="16" x2="10" y2="4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
                 <polyline points="6,8 10,4 14,8" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
