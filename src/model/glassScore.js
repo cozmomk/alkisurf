@@ -100,12 +100,24 @@ export function computeGlassScore({ windSpeedKt, windGustKt, windDirDeg, side, w
   const raw = 10 * windFactor * waveFactor;
   const score = Math.round(Math.max(0, Math.min(10, raw)));
 
+  // Wave state for user-facing explanation
+  let waveState = 'calm';
+  if (vEffKt > 3 && Hs_current > 0.02) {
+    if (devFraction < 0.4) waveState = 'building';
+    else if (devFraction < 0.85) waveState = 'developing';
+    else waveState = 'steady';
+  } else if (Hs_residual > 0.03 && Hs_residual > Hs_current) {
+    waveState = 'residual';
+  }
+
   return {
     score,
     Hs: Hs_total,
     label: scoreLabel(score),
     windEff: vEffKt,
     fetch,
+    waveState,
+    windDurHrs: Math.round(durationSeconds / 3600),
   };
 }
 

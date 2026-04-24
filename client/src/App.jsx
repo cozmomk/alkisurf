@@ -50,6 +50,45 @@ function SourceBadge({ ok, label }) {
   );
 }
 
+function ModelExplainer({ scores }) {
+  const [open, setOpen] = useState(false);
+  const n = scores.north, s = scores.south;
+  return (
+    <div className="card px-4 py-3">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between"
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+        <span className="text-[11px] font-semibold" style={{ color: '#5a7fa0' }}>How is this score calculated?</span>
+        <span className="text-[10px]" style={{ color: '#3a5a70' }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="flex flex-col gap-3 mt-3 text-[11px]" style={{ color: '#7a9ab8' }}>
+          <p>The glass score combines two factors: <strong style={{color:'#c8dff0'}}>wind</strong> and <strong style={{color:'#c8dff0'}}>waves</strong>, each 0–1, multiplied to give 0–10.</p>
+
+          <div>
+            <div className="font-semibold mb-1" style={{color:'#c8dff0'}}>Wind factor</div>
+            <p>Effective wind = 65% sustained + 35% gust. Scores drop sharply above 8kt and hit zero at 14kt — above that, the water is too rough regardless of waves.</p>
+          </div>
+
+          <div>
+            <div className="font-semibold mb-1" style={{color:'#c8dff0'}}>Wave factor (why N vs S differs)</div>
+            <p>Waves grow with <em>fetch</em> — the distance wind travels over open water before reaching you. Right now: north side {(n.fetch/1000).toFixed(1)}km, south side {(s.fetch/1000).toFixed(1)}km. The side with more fetch builds taller chop from the same wind.</p>
+          </div>
+
+          <div>
+            <div className="font-semibold mb-1" style={{color:'#c8dff0'}}>Duration matters</div>
+            <p>Waves don't appear instantly. Fresh wind takes 30–90 min to build fully developed chop over Puget Sound fetch distances. The score reflects this: a new wind gust scores higher than the same wind sustained for 2 hours.</p>
+            <p className="mt-1">When wind dies, chop lingers for ~35 min. The score shows "residual chop" during this window.</p>
+          </div>
+
+          <p style={{color:'#3a5a70'}}>Data: NDBC buoy WPOW1 (West Point, 1.5mi N) · NWS hourly forecast · Open-Meteo marine · NOAA tides</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -183,6 +222,9 @@ export default function App() {
             <SideCard side="south" data={scores.south} windDirDeg={windDirDeg} />
           </div>
         )}
+
+        {/* Model explainer */}
+        {scores && <ModelExplainer scores={scores} />}
 
         {/* Webcam visual check */}
         <WebcamPanel />

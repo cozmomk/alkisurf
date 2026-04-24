@@ -59,9 +59,17 @@ function fetchColor(fetchM) {
   return '#ff6b1a';
 }
 
+const WAVE_STATE = {
+  calm:      { label: 'Calm',            color: '#00e887' },
+  building:  { label: 'Chop building',   color: '#ffc300' },
+  developing:{ label: 'Chop developing', color: '#ffc300' },
+  steady:    { label: 'Chop steady',     color: '#ff6b1a' },
+  residual:  { label: 'Residual chop',   color: '#ff6b1a' },
+};
+
 export default function SideCard({ side, data, windDirDeg }) {
   if (!data) return null;
-  const { score, label, Hs, windEff, fetch: fetchM } = data;
+  const { score, label, Hs, windEff, fetch: fetchM, waveState, windDurHrs } = data;
   const color = scoreColor(score);
   const glowClass = SCORE_GLOW[label] || '';
   const htFt = Hs != null ? (Hs * 3.281).toFixed(2) : '—';
@@ -116,6 +124,18 @@ export default function SideCard({ side, data, windDirDeg }) {
           label="Fetch"
           value={fetchM != null ? `${(fetchM / 1000).toFixed(1)} km` : '—'}
         />
+        {waveState && (
+          <MetricRow
+            label="Wave state"
+            value={
+              <span style={{ color: WAVE_STATE[waveState]?.color ?? '#5a7fa0' }}>
+                {WAVE_STATE[waveState]?.label ?? waveState}
+                {windDurHrs > 0 && waveState !== 'residual' && waveState !== 'calm'
+                  ? ` · ${windDurHrs}h` : ''}
+              </span>
+            }
+          />
+        )}
         <MetricRow
           label="Eff wind"
           value={windEff != null ? `${windEff.toFixed(1)} kt` : '—'}
