@@ -4,11 +4,17 @@ function fmt(ts, opts) {
   return new Date(ts).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', ...opts });
 }
 
-function SkyEmoji({ skyCover }) {
+function isNight(ts) {
+  const hour = parseInt(new Date(ts).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }));
+  return hour >= 20 || hour < 6;
+}
+
+function SkyEmoji({ skyCover, ts }) {
   if (skyCover == null) return null;
-  if (skyCover <= 15) return '☀️';
-  if (skyCover <= 35) return '🌤';
-  if (skyCover <= 60) return '⛅';
+  const night = ts != null && isNight(ts);
+  if (skyCover <= 15) return night ? '🌙' : '☀️';
+  if (skyCover <= 35) return night ? '🌙' : '🌤';
+  if (skyCover <= 60) return night ? '☁️' : '⛅';
   return '☁️';
 }
 
@@ -102,7 +108,7 @@ function WindowPair({ north, south }) {
         <span className="text-sm font-semibold" style={{ color: '#e2eef7' }}>
           {startStr} – {endStr}
         </span>
-        <SkyEmoji skyCover={ref.skyCover} />
+        <SkyEmoji skyCover={ref.skyCover} ts={ref.start} />
         {ref.airTempF && (
           <span className="text-xs ml-auto" style={{ color: '#4a6a88' }}>
             {Math.round(ref.airTempF)}°F

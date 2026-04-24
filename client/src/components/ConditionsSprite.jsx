@@ -28,7 +28,13 @@ function scoreToParams(score) {
   return              { amp: 18,  freq: 0.095, spd: 0.045, pose: 'nogo' };
 }
 
+function isNightNow() {
+  const hour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }));
+  return hour >= 20 || hour < 6;
+}
+
 function skyFromData(windSpeedKt, skyCover) {
+  if (isNightNow()) return 'night';
   if (skyCover == null) return windSpeedKt > 14 ? 'rain' : 'clear';
   if (skyCover <= 15) return 'sunny';
   if (skyCover <= 35) return 'partly';
@@ -145,9 +151,15 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = nu
 
     svg.appendChild(E('rect', { x:0, y:0, width:W, height:H, fill:'url(#cs-sky)' }));
 
-    // Sun
+    // Sun / Moon
     let sunEl = null;
-    if (sky === 'sunny' || sky === 'partly') {
+    if (sky === 'night') {
+      // crescent moon
+      const mg = E('g', { transform:'translate(292,18)' });
+      mg.appendChild(E('circle', { cx:0, cy:0, r:9, fill:'#c8d8f0', opacity:'0.9' }));
+      mg.appendChild(E('circle', { cx:5, cy:-3, r:7, fill: skyColors[1] }));
+      svg.appendChild(mg);
+    } else if (sky === 'sunny' || sky === 'partly') {
       const sg = E('g', { transform:'translate(292,18)' });
       for (let i = 0; i < 8; i++) {
         const a = i / 8 * Math.PI * 2, r1 = sky==='sunny'?10:8, r2 = sky==='sunny'?14:11;
