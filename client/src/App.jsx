@@ -1,4 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Component } from 'react';
+
+export class ErrorBoundary extends Component {
+  state = { err: null };
+  static getDerivedStateFromError(err) { return { err }; }
+  render() {
+    if (this.state.err) return (
+      <div style={{ padding: 24, color: '#ff6b1a', fontFamily: 'monospace', fontSize: 12, whiteSpace: 'pre-wrap' }}>
+        App error: {this.state.err.message}{'\n'}{this.state.err.stack}
+      </div>
+    );
+    return this.props.children;
+  }
+}
 import SideCard from './components/SideCard.jsx';
 import ConditionsBar from './components/ConditionsBar.jsx';
 import ForecastStrip from './components/ForecastStrip.jsx';
