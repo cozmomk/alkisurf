@@ -1,13 +1,8 @@
-const STATIC_CACHE = 'alkisurf-static-v1';
+const STATIC_CACHE = 'alkisurf-static-v2';
 const API_CACHE = 'alkisurf-api-v1';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(STATIC_CACHE).then(cache =>
-      cache.addAll(['/', '/manifest.json'])
-    )
-  );
 });
 
 self.addEventListener('activate', event => {
@@ -44,8 +39,23 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Static assets: cache-first
+  // Fingerprinted assets (/assets/*.js, /assets/*.css): cache-first, safe forever
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        if (cached) return cached;
+        return fetch(event.request).then(res => {
+          const clone = res.clone();
+          caches.open(STATIC_CACHE).then(c => c.put(event.request, clone));
+          return res;
+        });
+      })
+    );
+    return;
+  }
+
+  // HTML and everything else: network-first so deploys are always reflected
   event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request))
+    fetch(event.request).catch(() => caches.match(event.request))
   );
 });
