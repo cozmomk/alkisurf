@@ -96,6 +96,8 @@ export default function ForecastStrip({ forecast, side }) {
   const nowMarkerRef = useRef(null);
   const now = Date.now();
 
+  const hasPast = forecast.some(h => h.time < now && h.actual != null);
+
   // Scroll so "now" is near the left edge on mount
   useEffect(() => {
     if (nowMarkerRef.current && scrollRef.current) {
@@ -106,6 +108,12 @@ export default function ForecastStrip({ forecast, side }) {
   }, [forecast]);
 
   return (
+    <div>
+    {hasPast && (
+      <div className="flex items-center gap-1 mb-1.5 px-0.5">
+        <span className="text-[9px]" style={{ color: '#3a5a70' }}>← scroll to see actual vs predicted</span>
+      </div>
+    )}
     <div ref={scrollRef} className="forecast-strip">
       {forecast.map((h, i) => {
         const isPast = h.time < now;
@@ -130,6 +138,7 @@ export default function ForecastStrip({ forecast, side }) {
           </div>
         );
       })}
+    </div>
     </div>
   );
 }
