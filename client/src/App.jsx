@@ -15,7 +15,7 @@ export class ErrorBoundary extends Component {
 import SideCard from './components/SideCard.jsx';
 import ConditionsBar from './components/ConditionsBar.jsx';
 import ForecastStrip from './components/ForecastStrip.jsx';
-import BestWindows from './components/BestWindows.jsx';
+import WeatherDays from './components/WeatherDays.jsx';
 import WebcamPanel from './components/WebcamPanel.jsx';
 import InstallNudge from './components/InstallNudge.jsx';
 import ReportButton from './components/ReportButton.jsx';
@@ -218,13 +218,20 @@ export default function App() {
         {/* Side cards */}
         {scores && (
           <div className="flex gap-3">
-            <SideCard side="north" data={scores.north} windDirDeg={windDirDeg} />
-            <SideCard side="south" data={scores.south} windDirDeg={windDirDeg} />
+            <SideCard side="north" data={scores.north} windDirDeg={windDirDeg}
+              forecast={data?.forecast} airTempF={current?.airTempF} />
+            <SideCard side="south" data={scores.south} windDirDeg={windDirDeg}
+              forecast={data?.forecast} airTempF={current?.airTempF} />
           </div>
         )}
 
         {/* Model explainer */}
         {scores && <ModelExplainer scores={scores} />}
+
+        {/* 3-day outlook + best windows */}
+        {data?.forecast?.length > 0 && (
+          <WeatherDays forecast={data.forecast} bestWindows={data.bestWindows} />
+        )}
 
         {/* Webcam visual check */}
         <WebcamPanel />
@@ -239,11 +246,6 @@ export default function App() {
             </div>
             <ForecastStrip forecast={data.forecast} />
           </div>
-        )}
-
-        {/* Best windows */}
-        {data?.bestWindows?.length > 0 && (
-          <BestWindows windows={data.bestWindows} />
         )}
 
         {/* Report button */}

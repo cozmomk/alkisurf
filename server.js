@@ -9,6 +9,7 @@ import { fetchBuoyData } from './src/fetchers/buoy.js';
 import { fetchTideData } from './src/fetchers/tides.js';
 import { fetchWeatherForecast } from './src/fetchers/weather.js';
 import { fetchMarineData } from './src/fetchers/marine.js';
+import { fetchUVData } from './src/fetchers/uv.js';
 import { computeGlassScore, findBestWindows } from './src/model/glassScore.js';
 import { compassLabel } from './src/model/fetchGeometry.js';
 
@@ -113,22 +114,25 @@ function runRetentionPass() {
 let cache = { data: null, ts: 0 };
 
 async function buildConditions() {
-  const [buoy, tides, weatherHours, marineHours] = await Promise.allSettled([
+  const [buoy, tides, weatherHours, marineHours, uvHours] = await Promise.allSettled([
     fetchBuoyData(fetch),
     fetchTideData(fetch),
     fetchWeatherForecast(fetch),
     fetchMarineData(fetch),
+    fetchUVData(fetch),
   ]);
 
   const buoyData = buoy.status === 'fulfilled' ? buoy.value : null;
   const tideData = tides.status === 'fulfilled' ? tides.value : null;
   const nwsHours = weatherHours.status === 'fulfilled' ? weatherHours.value : [];
   const marine = marineHours.status === 'fulfilled' ? marineHours.value : [];
+  const uvData = uvHours.status === 'fulfilled' ? uvHours.value : [];
 
   if (buoy.status === 'rejected') console.error('Buoy fetch error:', buoy.reason?.message);
   if (tides.status === 'rejected') console.error('Tides fetch error:', tides.reason?.message);
   if (weatherHours.status === 'rejected') console.error('NWS fetch error:', weatherHours.reason?.message);
   if (marineHours.status === 'rejected') console.error('Marine fetch error:', marineHours.reason?.message);
+  if (uvHours.status === 'rejected') console.error('UV fetch error:', uvHours.reason?.message);
 
   const current = buoyData?.current;
   const history = buoyData?.history || [];
@@ -226,6 +230,9 @@ async function buildConditions() {
         }
       }
 
+      const nearestUV = uvData.reduce((best, u) =>
+        Math.abs(u.ts - h.ts) < Math.abs((best?.ts ?? Infinity) - h.ts) ? u : best, null);
+
       return {
         time: h.ts,
         airTempF: h.airTempF,
@@ -234,6 +241,8 @@ async function buildConditions() {
         windDirLabel: compassLabel(h.windDirDeg),
         skyCover: h.skyCover,
         shortForecast: h.shortForecast,
+        precipProbability: h.precipProbability ?? null,
+        uvIndex: nearestUV?.uvIndex ?? null,
         waveHeightFt: nearestMarine?.waveHeightM != null ? nearestMarine.waveHeightM * 3.281 : null,
         sides,
         actual,

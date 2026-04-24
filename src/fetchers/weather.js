@@ -30,6 +30,7 @@ export async function fetchWeatherForecast(fetchFn) {
     windDirDeg: compassToDeg(p.windDirection),
     shortForecast: p.shortForecast,
     skyCover: estimateSkyCover(p.shortForecast),
+    precipProbability: p.probabilityOfPrecipitation?.value ?? null,
   }));
 }
 

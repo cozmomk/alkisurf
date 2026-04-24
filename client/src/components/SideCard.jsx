@@ -1,4 +1,4 @@
-import { scoreColor, compassLabel } from '../utils.js';
+import { scoreColor, compassLabel, skyEmoji, uvColor, uvLabel } from '../utils.js';
 
 const SCORE_GLOW = {
   GLASS: 'score-glow-glass',
@@ -67,19 +67,51 @@ const WAVE_STATE = {
   residual:  { label: 'Residual chop',   color: '#ff6b1a' },
 };
 
-export default function SideCard({ side, data, windDirDeg }) {
+function computeTrend(side, currentScore, forecast) {
+  const now = Date.now();
+  const nextHours = (forecast || [])
+    .filter(h => h.time > now && h.time <= now + 3 * 3600 * 1000)
+    .slice(0, 3);
+  if (!nextHours.length) return null;
+  const avg = nextHours.reduce((s, h) => s + (h.sides?.[side]?.score ?? currentScore), 0) / nextHours.length;
+  const delta = avg - currentScore;
+  if (delta > 1.2) return 'up';
+  if (delta < -1.2) return 'down';
+  return 'steady';
+}
+
+export default function SideCard({ side, data, windDirDeg, forecast, airTempF }) {
   if (!data) return null;
   const { score, label, Hs, windEff, fetch: fetchM, waveState, windDurHrs } = data;
   const color = scoreColor(score);
   const glowClass = SCORE_GLOW[label] || '';
   const htFt = Hs != null ? (Hs * 3.281).toFixed(2) : '—';
 
+  const trend = computeTrend(side, score, forecast);
+  const now = Date.now();
+  const nextHour = (forecast || []).find(h => h.time > now);
+  const sky = skyEmoji(nextHour?.skyCover, nextHour?.time);
+  const uv = nextHour?.uvIndex != null ? Math.round(nextHour.uvIndex) : null;
+
+  const trendLabel = trend === 'up' ? '↑ Improving' : trend === 'down' ? '↓ Worsening' : '→ Holding';
+  const trendColor = trend === 'up' ? '#00e887' : trend === 'down' ? '#ff6b1a' : '#ffc300';
+
   return (
     <div className="card p-4 flex flex-col gap-3 flex-1 min-w-0">
       {/* Side label */}
       <div>
-        <div className="text-[11px] font-bold tracking-widest uppercase" style={{ color: '#e2eef7' }}>
-          {side === 'north' ? 'North Side' : 'South Side'}
+        <div className="flex items-center justify-between gap-1">
+          <div className="text-[11px] font-bold tracking-widest uppercase" style={{ color: '#e2eef7' }}>
+            {side === 'north' ? 'North Side' : 'South Side'}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {sky && <span style={{ fontSize: 14 }}>{sky}</span>}
+            {airTempF != null && (
+              <span className="text-[10px] font-semibold" style={{ color: '#5a7fa0' }}>
+                {Math.round(airTempF)}°F
+              </span>
+            )}
+          </div>
         </div>
         <div className="text-[10px]" style={{ color: '#5a7fa0' }}>
           {side === 'north' ? 'Elliott Bay' : 'Open Sound'}
@@ -100,6 +132,9 @@ export default function SideCard({ side, data, windDirDeg }) {
         <span className="text-[11px] font-bold tracking-wide text-center leading-tight" style={{ color }}>
           {label}
         </span>
+        {trend && (
+          <span className="text-[9px] font-semibold" style={{ color: trendColor }}>{trendLabel}</span>
+        )}
       </div>
 
       {/* Swell bar */}
@@ -116,6 +151,12 @@ export default function SideCard({ side, data, windDirDeg }) {
 
       {/* Metrics */}
       <div className="flex flex-col gap-1.5">
+        {uv != null && (
+          <MetricRow
+            label="UV now"
+            value={<span style={{ color: uvColor(uv) }}>{uv} · {uvLabel(uv)}</span>}
+          />
+        )}
         <MetricRow
           label="Exposure"
           value={<span style={{ color: fetchColor(fetchM) }}>{fetchLabel(fetchM)}</span>}
