@@ -20,6 +20,9 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
+  // Don't intercept cross-origin requests (e.g. Cloudflare analytics)
+  if (url.origin !== self.location.origin) return;
+
   if (url.pathname === '/api/conditions') {
     // Network-first: serve fresh data, fall back to cache when offline
     event.respondWith(
