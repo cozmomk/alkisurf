@@ -54,7 +54,7 @@ export default function App() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [forecastSide, setForecastSide] = useState('north');
+
   const [tick, setTick] = useState(0);
 
   const load = useCallback(async () => {
@@ -187,31 +187,15 @@ export default function App() {
         {/* Webcam visual check */}
         <WebcamPanel />
 
-        {/* Forecast strip with side toggle */}
+        {/* Forecast strip */}
         {data?.forecast?.length > 0 && (
           <div className="card p-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="mb-3">
               <span className="text-xs font-bold tracking-widest uppercase" style={{ color: '#5a7fa0' }}>
                 48-Hour Forecast
               </span>
-              <div className="flex gap-1 p-1 rounded-lg" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                {['north', 'south'].map(s => (
-                  <button
-                    key={s}
-                    onClick={() => setForecastSide(s)}
-                    className="text-[11px] font-semibold px-2.5 py-1 rounded-md transition-all"
-                    style={{
-                      background: forecastSide === s ? 'rgba(255,255,255,0.12)' : 'transparent',
-                      color: forecastSide === s ? '#e2eef7' : '#5a7fa0',
-                      cursor: 'pointer',
-                      border: 'none',
-                    }}>
-                    {s === 'north' ? 'N. Side' : 'S. Side'}
-                  </button>
-                ))}
-              </div>
             </div>
-            <ForecastStrip forecast={data.forecast} side={forecastSide} />
+            <ForecastStrip forecast={data.forecast} />
           </div>
         )}
 
