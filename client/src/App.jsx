@@ -125,6 +125,7 @@ export default function App() {
   const current = data?.current;
   const windDirDeg = current?.windDirDeg ?? 0;
   const scores = current?.scores;
+  const currentForecast = data?.forecast?.find(h => h.time >= Date.now()) ?? data?.forecast?.[0] ?? null;
 
   // Determine overall best side right now
   const bestSide = scores
@@ -211,9 +212,9 @@ export default function App() {
           <ConditionsSprite
             score={Math.max(scores.north.score, scores.south.score)}
             windSpeedKt={current?.windSpeedKt}
-            skyCover={data?.forecast?.[0]?.skyCover ?? null}
-            shortForecast={data?.forecast?.[0]?.shortForecast ?? null}
-            precipProbability={data?.forecast?.[0]?.precipProbability ?? null}
+            skyCover={currentForecast?.skyCover ?? null}
+            shortForecast={currentForecast?.shortForecast ?? null}
+            precipProbability={currentForecast?.precipProbability ?? null}
           />
         )}
 

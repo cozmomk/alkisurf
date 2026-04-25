@@ -1,9 +1,9 @@
 import { scoreColor, skyEmoji, uvColor, uvLabel, compassLabel } from '../utils.js';
 
 function ptDayKey(ts) {
-  return new Date(ts).toLocaleDateString('en-US', {
-    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
-  });
+  return new Date(ts).toLocaleDateString('en-CA', {
+    timeZone: 'America/Los_Angeles',
+  }); // YYYY-MM-DD — sorts correctly across year boundaries
 }
 
 function ptHour(ts) {
@@ -199,6 +199,8 @@ export default function WeatherDays({ forecast, bestWindows }) {
   const days = groupByDay(forecast);
   if (!days.length) return null;
 
+  const todayKey = ptDayKey(Date.now());
+  const tomorrowKey = ptDayKey(Date.now() + 86400000);
   const summaries = days.map(([key, hours]) => summarizeDay(key, hours, bestWindows));
 
   return (
@@ -207,8 +209,8 @@ export default function WeatherDays({ forecast, bestWindows }) {
         3-Day Outlook
       </span>
       <div className="flex gap-2">
-        {summaries.map((s, i) => (
-          <DayCard key={s.dayKey} summary={s} isFirst={i === 0} isSecond={i === 1} />
+        {summaries.map((s) => (
+          <DayCard key={s.dayKey} summary={s} isFirst={s.dayKey === todayKey} isSecond={s.dayKey === tomorrowKey} />
         ))}
       </div>
     </div>

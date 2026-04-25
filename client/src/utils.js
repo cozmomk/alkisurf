@@ -7,7 +7,7 @@ export function skyEmoji(skyCover, ts) {
   if (skyCover <= 15) return night ? '🌙' : '☀️';
   if (skyCover <= 35) return night ? '🌙' : '🌤';
   if (skyCover <= 60) return night ? '🌤' : '⛅';
-  if (skyCover <= 80) return '🌥';
+  if (skyCover <= 80) return night ? '☁️' : '🌥';
   return '☁️';
 }
 

@@ -156,6 +156,7 @@ function makeWindow(side, streak) {
     start: streak[0].time,
     end: streak[n - 1].time,
     score: Math.round(avg(h => sideData(h).score)),
+    label: scoreLabel(Math.round(avg(h => sideData(h).score))),
     airTempF: streak[0].airTempF,
     skyCover: streak[0].skyCover,
     avgWindKt: Math.round(avg(h => h.windSpeedKt || 0)),
