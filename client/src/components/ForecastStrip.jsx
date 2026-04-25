@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { scoreColor, compassLabel, skyEmoji, uvColor, uvLabel } from '../utils.js';
+import { scoreColor, compassLabel, skyEmoji, uvColor } from '../utils.js';
 
 function fmt(ts, opts) {
   return new Date(ts).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', ...opts });

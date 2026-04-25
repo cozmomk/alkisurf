@@ -1,6 +1,6 @@
 export function skyEmoji(skyCover, ts) {
   const night = ts != null && (() => {
-    const h = parseInt(new Date(ts).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }));
+    const h = parseInt(new Date(ts).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false })) % 24;
     return h >= 20 || h < 6;
   })();
   if (skyCover == null) return null;
@@ -8,7 +8,7 @@ export function skyEmoji(skyCover, ts) {
   if (skyCover <= 35) return night ? '🌙' : '🌤';
   if (skyCover <= 60) return night ? '🌤' : '⛅';
   if (skyCover <= 80) return '🌥';
-  return skyCover >= 90 ? '☁️' : '☁️';
+  return '☁️';
 }
 
 export function uvColor(uv) {

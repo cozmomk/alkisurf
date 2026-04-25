@@ -6,15 +6,6 @@ import { skyFromData } from '../components/ConditionsSprite.jsx';
 const DAY_TIME = new Date('2025-07-15T21:00:00Z'); // 14:00 PT
 const NIGHT_TIME = new Date('2025-07-16T06:30:00Z'); // 23:30 PT
 
-function withTime(fakeDate, fn) {
-  const spy = vi.spyOn(globalThis, 'Date').mockImplementation((...args) => {
-    if (args.length === 0) return new Date(fakeDate);
-    return new (vi.importActual('vitest').Date || global.Date.bind(global))(...args);
-  });
-  try { return fn(); } finally { spy.mockRestore(); }
-}
-
-// Simpler approach: mock Date constructor only for no-arg calls
 describe('skyFromData (daytime)', () => {
   beforeEach(() => {
     // Override Date.now and new Date() to return 2pm PT

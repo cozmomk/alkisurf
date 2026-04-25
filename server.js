@@ -230,8 +230,8 @@ async function buildConditions() {
         }
       }
 
-      const nearestUV = uvData.reduce((best, u) =>
-        Math.abs(u.ts - h.ts) < Math.abs((best?.ts ?? Infinity) - h.ts) ? u : best, null);
+      const nearestUV = uvData.length ? uvData.reduce((best, u) =>
+        Math.abs(u.ts - h.ts) < Math.abs((best?.ts ?? Infinity) - h.ts) ? u : best, null) : null;
 
       return {
         time: h.ts,
