@@ -38,6 +38,19 @@ export function scoreColor(score) {
   return '#ff2b55';
 }
 
+export function computeTrend(side, currentScore, forecast) {
+  const now = Date.now();
+  const nextHours = (forecast || [])
+    .filter(h => h.time > now && h.time <= now + 3 * 3600 * 1000)
+    .slice(0, 3);
+  if (!nextHours.length) return null;
+  const avg = nextHours.reduce((s, h) => s + (h.sides?.[side]?.score ?? currentScore), 0) / nextHours.length;
+  const delta = avg - currentScore;
+  if (delta > 1.2) return 'up';
+  if (delta < -1.2) return 'down';
+  return 'steady';
+}
+
 export function compassLabel(deg) {
   if (deg == null) return '—';
   const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];

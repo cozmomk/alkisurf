@@ -1,4 +1,4 @@
-import { scoreColor, compassLabel, skyEmoji, uvColor, uvLabel } from '../utils.js';
+import { scoreColor, compassLabel, skyEmoji, uvColor, uvLabel, computeTrend } from '../utils.js';
 
 const SCORE_GLOW = {
   GLASS: 'score-glow-glass',
@@ -67,18 +67,6 @@ const WAVE_STATE = {
   residual:  { label: 'Residual chop',   color: '#ff6b1a' },
 };
 
-function computeTrend(side, currentScore, forecast) {
-  const now = Date.now();
-  const nextHours = (forecast || [])
-    .filter(h => h.time > now && h.time <= now + 3 * 3600 * 1000)
-    .slice(0, 3);
-  if (!nextHours.length) return null;
-  const avg = nextHours.reduce((s, h) => s + (h.sides?.[side]?.score ?? currentScore), 0) / nextHours.length;
-  const delta = avg - currentScore;
-  if (delta > 1.2) return 'up';
-  if (delta < -1.2) return 'down';
-  return 'steady';
-}
 
 export default function SideCard({ side, data, windDirDeg, forecast, airTempF }) {
   if (!data) return null;

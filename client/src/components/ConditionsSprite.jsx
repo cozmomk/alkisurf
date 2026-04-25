@@ -33,7 +33,7 @@ function isNightNow() {
   return hour >= 20 || hour < 6;
 }
 
-function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbability) {
+export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbability) {
   if (isNightNow()) return 'night';
 
   const forecastText = (shortForecast || '').toLowerCase();
