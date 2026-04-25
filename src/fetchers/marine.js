@@ -15,7 +15,7 @@ const VARS = [
 ].join(',');
 
 export async function fetchMarineData(fetchFn) {
-  const url = `${BASE}?latitude=${LAT}&longitude=${LON}&hourly=${VARS}&timezone=America%2FLos_Angeles&forecast_days=3`;
+  const url = `${BASE}?latitude=${LAT}&longitude=${LON}&hourly=${VARS}&timezone=UTC&forecast_days=3`;
   const res = await fetchFn(url, { signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`Open-Meteo marine failed: ${res.status}`);
   const json = await res.json();
