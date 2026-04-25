@@ -212,6 +212,8 @@ export default function App() {
             score={Math.max(scores.north.score, scores.south.score)}
             windSpeedKt={current?.windSpeedKt}
             skyCover={data?.forecast?.[0]?.skyCover ?? null}
+            shortForecast={data?.forecast?.[0]?.shortForecast ?? null}
+            precipProbability={data?.forecast?.[0]?.precipProbability ?? null}
           />
         )}
 

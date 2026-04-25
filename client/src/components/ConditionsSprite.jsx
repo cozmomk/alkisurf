@@ -33,13 +33,20 @@ function isNightNow() {
   return hour >= 20 || hour < 6;
 }
 
-function skyFromData(windSpeedKt, skyCover) {
+function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbability) {
   if (isNightNow()) return 'night';
-  if (skyCover == null) return windSpeedKt > 14 ? 'rain' : 'clear';
+
+  const forecastText = (shortForecast || '').toLowerCase();
+  const isRaining = /rain|shower|drizzle/.test(forecastText) ||
+                    (precipProbability != null && precipProbability > 50);
+  const isThunder = /thunder/.test(forecastText);
+
+  if (isThunder) return 'storm';
+  if (skyCover == null) return isRaining ? 'rain' : 'sunny';
   if (skyCover <= 15) return 'sunny';
-  if (skyCover <= 35) return 'partly';
-  if (skyCover <= 70) return windSpeedKt > 12 ? 'rain' : 'overcast';
-  return windSpeedKt > 10 ? 'rain' : 'overcast';
+  if (skyCover <= 35) return isRaining ? 'rain' : 'partly';
+  if (skyCover <= 70) return isRaining ? 'rain' : 'overcast';
+  return isRaining ? 'rain' : 'overcast';
 }
 
 // Build wireframe paddler into a <g> element
@@ -119,7 +126,7 @@ function buildPaddler(g, pose, color) {
   }
 }
 
-export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = null }) {
+export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = null, shortForecast = null, precipProbability = null }) {
   const svgRef = useRef(null);
   const stateRef = useRef(null);
 
@@ -130,7 +137,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = nu
 
     const color = scoreColor(score ?? 0);
     const { amp, freq, spd, pose } = scoreToParams(score ?? 0);
-    const sky = skyFromData(windSpeedKt, skyCover);
+    const sky = skyFromData(windSpeedKt, skyCover, shortForecast, precipProbability);
 
     // Sky gradient bg
     const defs = E('defs', {});
@@ -180,11 +187,11 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = nu
     }
     if (sky === 'partly') mkCloud(240, 20, 11);
     if (sky === 'overcast') { mkCloud(50, 18, 14); mkCloud(180, 13, 12); mkCloud(270, 20, 9); }
-    if (sky === 'rain')     { mkCloud(30, 16, 16); mkCloud(155, 11, 15); mkCloud(270, 17, 11); }
+    if (sky === 'rain' || sky === 'storm') { mkCloud(30, 16, 16); mkCloud(155, 11, 15); mkCloud(270, 17, 11); }
 
     // Lightning
     let boltEl = null;
-    if (sky === 'rain' && windSpeedKt > 16) {
+    if (sky === 'storm') {
       boltEl = E('path', { d:'M 180 10 L 174 20 L 178 20 L 172 32 L 184 18 L 180 18 Z', fill:'#ffe040', opacity:'0.9' });
       svg.appendChild(boltEl);
     }
@@ -205,7 +212,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = nu
 
     // Rain drops
     const rainDrops = [];
-    const rainCount = sky === 'rain' ? 18 : 0;
+    const rainCount = (sky === 'rain' || sky === 'storm') ? 18 : 0;
     for (let i = 0; i < rainCount; i++) {
       const d = E('line', { stroke:'#88b8d8', 'stroke-width':'0.8', 'stroke-linecap':'round', opacity:'0.4' });
       svg.appendChild(d);
