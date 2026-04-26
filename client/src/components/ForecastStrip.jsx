@@ -50,6 +50,7 @@ function Cell({ hour }) {
   const uv = hour.uvIndex != null ? Math.round(hour.uvIndex) : null;
   const precip = hour.precipProbability != null ? Math.round(hour.precipProbability) : null;
   const cloud = hour.skyCover != null ? Math.round(hour.skyCover) : null;
+  const temp = hour.airTempF != null ? Math.round(hour.airTempF) : null;
 
   return (
     <div className="forecast-cell card flex flex-col items-center gap-1.5 p-2"
@@ -79,6 +80,11 @@ function Cell({ hour }) {
         <span className="text-[9px] whitespace-nowrap" style={{ color: '#4a6a88' }}>
           {Math.round(windSpeed)}kt {windDir}
         </span>
+      )}
+
+      {/* Temp */}
+      {temp != null && (
+        <span className="text-[9px] font-semibold" style={{ color: '#c8dff0' }}>{temp}°F</span>
       )}
 
       {/* UV */}
