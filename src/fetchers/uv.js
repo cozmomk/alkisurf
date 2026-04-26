@@ -11,7 +11,7 @@ export async function fetchUVData(fetchFn) {
   const h = json.hourly;
   if (!h?.time) return [];
   return h.time.map((t, i) => ({
-    ts: new Date(t).getTime(),
+    ts: new Date(t + 'Z').getTime(),
     uvIndex: h.uv_index?.[i] ?? null,
   }));
 }

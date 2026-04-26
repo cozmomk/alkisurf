@@ -24,7 +24,7 @@ export async function fetchMarineData(fetchFn) {
   if (!h || !h.time) return [];
 
   return h.time.map((t, i) => ({
-    ts: new Date(t).getTime(),
+    ts: new Date(t + 'Z').getTime(),
     waveHeightM: h.wave_height?.[i] ?? null,
     waveDirDeg: h.wave_direction?.[i] ?? null,
     wavePeriodS: h.wave_period?.[i] ?? null,
