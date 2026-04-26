@@ -194,6 +194,10 @@ async function buildConditions() {
       const nearestMarine = marine.reduce((best, m) =>
         Math.abs(m.ts - h.ts) < Math.abs((best?.ts || Infinity) - h.ts) ? m : best, null);
 
+      // Pass buoy history for near-term hours so residual wave state carries forward.
+      // Beyond 3h the history is stale enough that the model's 6h age cutoff handles it.
+      const forecastHistory = (h.ts - now) <= 3 * 3600 * 1000 ? history : [];
+
       const sides = h._storedScores
         ? {
             north: { score: h._storedScores.north, label: '' },
@@ -205,7 +209,7 @@ async function buildConditions() {
               windGustKt: h.windSpeedKt * 1.3,
               windDirDeg: h.windDirDeg,
               side: 'north',
-              windHistory: [],
+              windHistory: forecastHistory,
               tideRateFtHr: 0,
             }),
             south: computeGlassScore({
@@ -213,7 +217,7 @@ async function buildConditions() {
               windGustKt: h.windSpeedKt * 1.3,
               windDirDeg: h.windDirDeg,
               side: 'south',
-              windHistory: [],
+              windHistory: forecastHistory,
               tideRateFtHr: 0,
             }),
           };
