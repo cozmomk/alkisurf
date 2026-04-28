@@ -3,13 +3,22 @@ import { scoreColor } from '../utils.js';
 
 const W = 320, H = 100, WL = 64; // viewBox dims, waterline y
 
-// Wave math
-function wy(x, amp, freq, ph) {
-  return WL + amp * Math.sin(x * freq + ph) + amp * 0.38 * Math.sin(x * freq * 2.2 + ph * 0.8);
+// Wave math — three independent components with trochoidal shaping + grouping envelope.
+// ph1/ph2/ph3 advance at different speeds so the pattern never repeats cleanly.
+function wy(x, amp, freq, ph1, ph2, ph3) {
+  // Trochoidal primary: sin - 0.22*sin(2θ) gives sharper crests, flatter troughs
+  const primary   = amp * (Math.sin(x * freq + ph1) - 0.22 * Math.sin(2 * x * freq + 2 * ph1));
+  // Secondary chop — independent phase, slightly higher freq
+  const secondary = amp * 0.30 * Math.sin(x * freq * 1.63 + ph2);
+  // Tertiary texture — smallest, adds surface roughness
+  const tertiary  = amp * 0.13 * Math.sin(x * freq * 2.71 + ph3);
+  // Grouping envelope — waves arrive in sets (0.78–1.0 modulation)
+  const group     = 0.78 + 0.22 * Math.sin(x * freq * 0.28 + ph1 * 0.11);
+  return WL + group * (primary + secondary + tertiary);
 }
-function wPath(amp, freq, ph, closed, w = W) {
+function wPath(amp, freq, ph1, ph2, ph3, closed, w = W) {
   let d = `M 0 ${WL}`;
-  for (let x = 0; x <= w; x += 3) d += ` L ${x} ${wy(x, amp, freq, ph).toFixed(2)}`;
+  for (let x = 0; x <= w; x += 3) d += ` L ${x} ${wy(x, amp, freq, ph1, ph2, ph3).toFixed(2)}`;
   return closed ? d + ` L ${w} ${H} L 0 ${H} Z` : d;
 }
 
@@ -230,21 +239,24 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = nu
     buildPaddler(figG, pose, color);
     svg.appendChild(figG);
 
-    // Store animation state
-    stateRef.current = { amp, freq, spd, color, phase: Math.random()*Math.PI*2, sunRot:0, wFill, wLine, figG, sunEl, boltEl, rainDrops };
+    // Store animation state — three independent phases advance at different rates
+    const r = () => Math.random() * Math.PI * 2;
+    stateRef.current = { amp, freq, spd, color, ph1: r(), ph2: r(), ph3: r(), sunRot:0, wFill, wLine, figG, sunEl, boltEl, rainDrops };
 
     let raf;
     function tick() {
       const s = stateRef.current;
       if (!s) return;
-      s.phase += s.spd;
+      s.ph1 += s.spd;          // primary wave speed
+      s.ph2 += s.spd * 1.13;   // secondary slightly faster
+      s.ph3 += s.spd * 0.79;   // tertiary slower
       s.sunRot += 0.25;
 
-      s.wFill.setAttribute('d', wPath(s.amp, s.freq, s.phase, true));
-      s.wLine.setAttribute('d', wPath(s.amp, s.freq, s.phase, false));
+      s.wFill.setAttribute('d', wPath(s.amp, s.freq, s.ph1, s.ph2, s.ph3, true));
+      s.wLine.setAttribute('d', wPath(s.amp, s.freq, s.ph1, s.ph2, s.ph3, false));
 
-      const fx = 130, fy = wy(fx, s.amp, s.freq, s.phase);
-      const slope = (wy(fx+2, s.amp, s.freq, s.phase) - fy) / 2;
+      const fx = 130, fy = wy(fx, s.amp, s.freq, s.ph1, s.ph2, s.ph3);
+      const slope = (wy(fx+2, s.amp, s.freq, s.ph1, s.ph2, s.ph3) - fy) / 2;
       const tilt = Math.atan(slope) * (180/Math.PI) * 0.45;
       s.figG.setAttribute('transform', `translate(${fx},${fy.toFixed(2)}) rotate(${tilt.toFixed(2)})`);
 
