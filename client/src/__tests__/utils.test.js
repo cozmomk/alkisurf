@@ -155,34 +155,48 @@ describe('computeTrend', () => {
     const far = [{ time: h4, sides: { north: { score: 8 } } }];
     expect(computeTrend('north', 5, far)).toBeNull();
   });
-  it('returns up when avg score is >1.2 above current', () => {
+  it('returns up direction when avg score is >1.2 above current', () => {
     const forecast = [
       { time: h1, sides: { north: { score: 8 } } },
       { time: h2, sides: { north: { score: 9 } } },
     ];
-    expect(computeTrend('north', 5, forecast)).toBe('up');
+    expect(computeTrend('north', 5, forecast)).toMatchObject({ direction: 'up' });
   });
-  it('returns down when avg score is >1.2 below current', () => {
+  it('returns hoursUntil=1 when improvement starts in first hour', () => {
+    const forecast = [
+      { time: h1, sides: { north: { score: 8 } } },
+      { time: h2, sides: { north: { score: 9 } } },
+    ];
+    expect(computeTrend('north', 5, forecast)).toMatchObject({ direction: 'up', hoursUntil: 1 });
+  });
+  it('returns hoursUntil=2 when improvement starts in second hour', () => {
+    const forecast = [
+      { time: h1, sides: { north: { score: 5 } } }, // not yet better
+      { time: h2, sides: { north: { score: 9 } } }, // crosses threshold
+    ];
+    expect(computeTrend('north', 5, forecast)).toMatchObject({ direction: 'up', hoursUntil: 2 });
+  });
+  it('returns down direction when avg score is >1.2 below current', () => {
     const forecast = [
       { time: h1, sides: { north: { score: 2 } } },
       { time: h2, sides: { north: { score: 1 } } },
     ];
-    expect(computeTrend('north', 5, forecast)).toBe('down');
+    expect(computeTrend('north', 5, forecast)).toMatchObject({ direction: 'down' });
   });
-  it('returns steady when delta is within ±1.2', () => {
+  it('returns steady direction when delta is within ±1.2', () => {
     const forecast = [
       { time: h1, sides: { north: { score: 5 } } },
       { time: h2, sides: { north: { score: 6 } } },
     ];
-    expect(computeTrend('north', 5, forecast)).toBe('steady');
+    expect(computeTrend('north', 5, forecast)).toMatchObject({ direction: 'steady', hoursUntil: null });
   });
   it('uses currentScore when side data is missing from a forecast hour', () => {
     const forecast = [
-      { time: h1, sides: {} }, // missing north
+      { time: h1, sides: {} }, // missing north — falls back to currentScore=5
       { time: h2, sides: { north: { score: 9 } } },
     ];
-    // avg = (5 + 9) / 2 = 7, delta = 7 - 5 = 2 > 1.2
-    expect(computeTrend('north', 5, forecast)).toBe('up');
+    // avg = (5 + 9) / 2 = 7, delta = 2 > 1.2; first crossing is h2
+    expect(computeTrend('north', 5, forecast)).toMatchObject({ direction: 'up', hoursUntil: 2 });
   });
   it('limits to next 3 hours only', () => {
     const forecast = [
@@ -191,10 +205,10 @@ describe('computeTrend', () => {
       { time: h3, sides: { north: { score: 9 } } },
       { time: h4, sides: { north: { score: 0 } } }, // should be ignored
     ];
-    expect(computeTrend('north', 5, forecast)).toBe('up');
+    expect(computeTrend('north', 5, forecast)).toMatchObject({ direction: 'up' });
   });
   it('works for south side', () => {
     const forecast = [{ time: h1, sides: { south: { score: 1 } } }];
-    expect(computeTrend('south', 5, forecast)).toBe('down');
+    expect(computeTrend('south', 5, forecast)).toMatchObject({ direction: 'down' });
   });
 });

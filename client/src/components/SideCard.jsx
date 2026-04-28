@@ -81,8 +81,11 @@ export default function SideCard({ side, data, windDirDeg, forecast, airTempF })
   const sky = skyEmoji(nextHour?.skyCover, nextHour?.time);
   const uv = nextHour?.uvIndex != null ? Math.round(nextHour.uvIndex) : null;
 
-  const trendLabel = trend === 'up' ? '↑ Improving' : trend === 'down' ? '↓ Worsening' : '→ Holding';
-  const trendColor = trend === 'up' ? '#00e887' : trend === 'down' ? '#ff6b1a' : '#ffc300';
+  const trendDir = trend?.direction;
+  const trendHrs = trend?.hoursUntil;
+  const trendSuffix = trendHrs ? ` in ${trendHrs}h` : '';
+  const trendLabel = trendDir === 'up' ? `↑ Improving${trendSuffix}` : trendDir === 'down' ? `↓ Worsening${trendSuffix}` : '→ Holding';
+  const trendColor = trendDir === 'up' ? '#00e887' : trendDir === 'down' ? '#ff6b1a' : '#ffc300';
 
   return (
     <div className="card p-4 flex flex-col gap-3 flex-1 min-w-0">

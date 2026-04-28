@@ -44,11 +44,19 @@ export function computeTrend(side, currentScore, forecast) {
     .filter(h => h.time > now && h.time <= now + 3 * 3600 * 1000)
     .slice(0, 3);
   if (!nextHours.length) return null;
-  const avg = nextHours.reduce((s, h) => s + (h.sides?.[side]?.score ?? currentScore), 0) / nextHours.length;
+  const scores = nextHours.map(h => h.sides?.[side]?.score ?? currentScore);
+  const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
   const delta = avg - currentScore;
-  if (delta > 1.2) return 'up';
-  if (delta < -1.2) return 'down';
-  return 'steady';
+
+  function hoursUntilThreshold(threshold) {
+    const idx = scores.findIndex(s => threshold(s));
+    if (idx < 0) return null;
+    return Math.max(1, Math.round((nextHours[idx].time - now) / 3600000));
+  }
+
+  if (delta > 1.2) return { direction: 'up',     hoursUntil: hoursUntilThreshold(s => s > currentScore + 1.2) };
+  if (delta < -1.2) return { direction: 'down',   hoursUntil: hoursUntilThreshold(s => s < currentScore - 1.2) };
+  return { direction: 'steady', hoursUntil: null };
 }
 
 export function compassLabel(deg) {
