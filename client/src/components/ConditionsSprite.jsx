@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-// ─── scene constants (mirrors demo-paddler5) ─────────────────────────────────
+// ─── scene constants ──────────────────────────────────────────────────────────
 const CW = 540, CH = 270, CX = 250, BOARD_Y = 225, DRAW_H = 125;
 const WAVE_FREQ = 0.015, TIDE_RANGE = 22;
 const CROP_PAD_TOP = 28, CROP_PAD_LEFT = 12, CROP_PAD_RIGHT = 2, CROP_PAD_BOTTOM = 12;
@@ -15,7 +15,7 @@ function poseOf(s)     { return s>=9?4:s>=7?3:s>=5?2:s>=3?1:0; }
 function scoreToHs(s)  { return [.60,.52,.44,.34,.26,.20,.14,.09,.05,.03,.02][Math.round(s)]; }
 function hexRgb(h)     { return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
 
-// ─── sprite singleton (one load per page) ────────────────────────────────────
+// ─── sprite singleton ─────────────────────────────────────────────────────────
 let _spriteImg    = null;
 let _spriteLoaded = false;
 let _figureCrops  = null;
@@ -181,7 +181,7 @@ function _colorizeSprite(col, row, hexColor) {
   return result;
 }
 
-// ─── wave / tide helpers ─────────────────────────────────────────────────────
+// ─── wave / tide helpers ──────────────────────────────────────────────────────
 function wy(x, ph1, ph2, ph3, waveAmp, tideOffset) {
   const p2 = waveAmp * (Math.sin(x*WAVE_FREQ+ph1) - .22*Math.sin(2*x*WAVE_FREQ+2*ph1));
   const s2 = waveAmp * .30 * Math.sin(x*WAVE_FREQ*1.63+ph2);
@@ -218,7 +218,154 @@ function drawTideGauge(ctx, color, tideLevel) {
   ctx.textAlign = 'left';
 }
 
-// ─── sky condition helper (exported — used by tests) ─────────────────────────
+// ─── moon phase ───────────────────────────────────────────────────────────────
+function moonPhase(date = new Date()) {
+  const ref = new Date('2000-01-06T18:14:00Z');
+  const days = (date - ref) / 86400000;
+  return ((days % 29.530588853) + 29.530588853) % 29.530588853 / 29.530588853;
+}
+
+// ─── sky draw helpers ─────────────────────────────────────────────────────────
+function drawSun(ctx, x, y, r, t) {
+  const pulse = 1 + .04 * Math.sin(t * .8);
+  const glow = ctx.createRadialGradient(x, y, r * .3, x, y, r * 3.5);
+  glow.addColorStop(0, 'rgba(255,220,80,.25)');
+  glow.addColorStop(.5, 'rgba(255,180,40,.08)');
+  glow.addColorStop(1, 'rgba(255,130,0,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(x, y, r * 3.5 * pulse, 0, Math.PI * 2); ctx.fill();
+
+  ctx.save(); ctx.translate(x, y); ctx.rotate(t * .3);
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const len = (i % 2 === 0 ? 1.6 : 1.2) * r;
+    ctx.strokeStyle = `rgba(255,220,80,${.45 * (1 + .1 * Math.sin(t * 1.2 + i))})`;
+    ctx.lineWidth = i % 2 === 0 ? 1.5 : 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * (r + 3), Math.sin(a) * (r + 3));
+    ctx.lineTo(Math.cos(a) * (r + 3 + len), Math.sin(a) * (r + 3 + len));
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  const core = ctx.createRadialGradient(x - r * .25, y - r * .2, 0, x, y, r);
+  core.addColorStop(0, '#fff9d0'); core.addColorStop(.5, '#ffe566'); core.addColorStop(1, '#ffb020');
+  ctx.fillStyle = core;
+  ctx.beginPath(); ctx.arc(x, y, r * pulse, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawCloud(ctx, cx, cy, scale, alpha = 1) {
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#d8e8f4';
+  const puffs = [[0,0,28],[-26,10,22],[26,10,22],[-14,16,18],[14,16,18],[0,20,20]];
+  ctx.beginPath();
+  for (const [ox, oy, r] of puffs) {
+    ctx.moveTo(cx + ox * scale + r * scale, cy + oy * scale);
+    ctx.arc(cx + ox * scale, cy + oy * scale, r * scale, 0, Math.PI * 2);
+  }
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawStars(ctx, stars, t) {
+  for (const s of stars) {
+    const a = s.base * (.55 + .45 * Math.sin(t * s.tw + s.ph));
+    ctx.fillStyle = `rgba(215,230,255,${a})`;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function drawMoon(ctx, x, y, r, phase, t) {
+  void t;
+  const glow = ctx.createRadialGradient(x, y, r * .2, x, y, r * 2.6);
+  glow.addColorStop(0, 'rgba(215,225,255,.20)');
+  glow.addColorStop(1, 'rgba(180,200,255,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(x, y, r * 2.6, 0, Math.PI * 2); ctx.fill();
+
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
+
+  ctx.fillStyle = '#09141f';
+  ctx.fillRect(x - r - 1, y - r - 1, r * 2 + 2, r * 2 + 2);
+
+  if (phase < 0.02 || phase > 0.98) { ctx.restore(); return; }
+
+  ctx.fillStyle = '#dde7ff';
+  ctx.beginPath();
+  const K = 0.5523;
+  const waxing = phase < 0.5;
+  const xscale = waxing
+    ? Math.cos(Math.PI * 2 * phase)
+    : -Math.cos(Math.PI * 2 * phase);
+
+  if (waxing) {
+    ctx.arc(x, y, r, -Math.PI / 2, Math.PI / 2, false);
+    const cpx = x + xscale * r * K;
+    ctx.bezierCurveTo(cpx, y + r, cpx, y - r, x, y - r);
+  } else {
+    ctx.arc(x, y, r, -Math.PI / 2, Math.PI / 2, true);
+    const cpx = x + xscale * r * K;
+    ctx.bezierCurveTo(cpx, y + r, cpx, y - r, x, y - r);
+  }
+  ctx.fill();
+
+  ctx.globalAlpha = .18;
+  ctx.fillStyle = '#8898bb';
+  for (const [ox, oy, cr] of [[-.25, -.3, .12], [.3, .1, .09], [-.1, .35, .07]]) {
+    ctx.beginPath(); ctx.arc(x + ox * r, y + oy * r, cr * r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawRainLines(ctx, drops, t, speed = 1, heavy = false) {
+  for (const d of drops) {
+    const y = ((d.y + t * d.speed * speed) % BOARD_Y + BOARD_Y) % BOARD_Y;
+    const x = d.x + Math.sin(t * .45) * 5;
+    const a = heavy ? .3 + .2 * Math.sin(d.phase + t) : .45;
+    ctx.strokeStyle = `rgba(150,195,235,${a})`;
+    ctx.lineWidth = heavy && d.heavy ? 1.4 : .85;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 4, y + d.len); ctx.stroke();
+  }
+}
+
+function drawLightning(ctx, bolt, t) {
+  if (!bolt.active || bolt.startT === null) return;
+  const age = t - bolt.startT;
+  if (age > bolt.dur) { bolt.active = false; return; }
+  const a = age < .08 ? age / .08 : Math.max(0, 1 - (age - .08) / (bolt.dur - .08));
+  ctx.save();
+  ctx.strokeStyle = `rgba(255,255,220,${a * .9})`;
+  ctx.shadowColor = 'rgba(200,220,255,.85)'; ctx.shadowBlur = 14;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  let bx = bolt.x, by = 8;
+  for (const [dx, dy] of bolt.segs) {
+    ctx.moveTo(bx, by); bx += dx; by += dy; ctx.lineTo(bx, by);
+  }
+  ctx.stroke(); ctx.restore();
+  if (a > .02) {
+    ctx.fillStyle = `rgba(200,220,255,${a * .08})`;
+    ctx.fillRect(0, 0, CW, BOARD_Y);
+  }
+}
+
+function makeBolt() {
+  const x = 60 + Math.random() * (CW - 120);
+  const segs = []; let cy = 8;
+  while (cy < BOARD_Y - 20) {
+    const dy = 18 + Math.random() * 22, dx = (Math.random() - .5) * 38;
+    segs.push([dx, dy]); cy += dy;
+  }
+  return { active: false, x, segs, startT: null, dur: .22 + Math.random() * .18 };
+}
+
+// ─── sky palettes ─────────────────────────────────────────────────────────────
+const SKY_TOPS = { sunny: '#0d2035', partly: '#0d1e30', overcast: '#0c1925', rain: '#09141f', storm: '#060e12', night: '#04090f' };
+const SKY_BOTS = { sunny: '#0e3550', partly: '#0e2d44', overcast: '#0d2030', rain: '#0a1c2a', storm: '#07141a', night: '#060d18' };
+
+// ─── sky condition helper ─────────────────────────────────────────────────────
 function isNightNow() {
   const hour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }));
   return hour >= 20 || hour < 6;
@@ -249,6 +396,11 @@ function realTidePct(currentFt, hilos) {
   return Math.max(0, Math.min(1, (currentFt - nextL.ft) / range));
 }
 
+// ─── cloud scroll helper ──────────────────────────────────────────────────────
+function cloudX(ox, spd, t) {
+  return ((ox + t * spd) % (CW + 200) + CW + 200) % (CW + 200) - 100;
+}
+
 // ─── component ────────────────────────────────────────────────────────────────
 export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = null, shortForecast = null, precipProbability = null, tideCurrentFt = null, nextHilos = null }) {
   const canvasRef  = useRef(null);
@@ -268,20 +420,81 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = nu
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
-    let ph1 = Math.random()*Math.PI*2;
-    let ph2 = Math.random()*Math.PI*2;
-    let ph3 = Math.random()*Math.PI*2;
+    // Wave state
+    let ph1 = Math.random() * Math.PI * 2;
+    let ph2 = Math.random() * Math.PI * 2;
+    let ph3 = Math.random() * Math.PI * 2;
     let tidePhase = 0;
     let alive = true;
 
-    function tick() {
+    // Sky state (initialized once per mount)
+    const phase = moonPhase();
+
+    const stars = Array.from({ length: 85 }, () => ({
+      x: Math.random() * CW, y: Math.random() * (BOARD_Y - 10),
+      r: .5 + Math.random() * 1.3, base: .3 + Math.random() * .65,
+      tw: .4 + Math.random() * 1.1, ph: Math.random() * Math.PI * 2,
+    }));
+
+    const partlyClouds = [
+      { ox: 0,   oy: 0,  spd: 7,  sc: 1.2, a: .90 },
+      { ox: 170, oy: 20, spd: 4,  sc: .85, a: .70 },
+      { ox: 350, oy: 5,  spd: 10, sc: .95, a: .80 },
+      { ox: -70, oy: 32, spd: 6,  sc: .65, a: .55 },
+    ];
+
+    const overcastHi = Array.from({ length: 9 }, (_, i) => ({
+      ox: i * (CW / 9) - 30 + Math.random() * 40, oy: Math.random() * 20,
+      spd: 2 + Math.random() * 3, sc: .8 + Math.random() * .5, a: .55 + Math.random() * .25,
+    }));
+    const overcastLo = Array.from({ length: 5 }, (_, i) => ({
+      ox: i * (CW / 5) - 20 + Math.random() * 40, oy: 38 + Math.random() * 20,
+      spd: 1 + Math.random() * 2, sc: 1 + Math.random() * .4, a: .35 + Math.random() * .15,
+    }));
+
+    const rainClouds = [
+      { ox: 0,   oy: -5, spd: 3,   sc: 1.1, a: .70 },
+      { ox: 120, oy: 8,  spd: 5,   sc: .90, a: .65 },
+      { ox: 260, oy: -2, spd: 4,   sc: 1.2, a: .70 },
+      { ox: 380, oy: 10, spd: 3.5, sc: 1.0, a: .60 },
+      { ox: -60, oy: 5,  spd: 4.5, sc: .85, a: .65 },
+      { ox: 480, oy: -3, spd: 3.8, sc: 1.05, a: .63 },
+    ];
+    const rainDrops = Array.from({ length: 110 }, () => ({
+      x: Math.random() * CW, y: Math.random() * BOARD_Y,
+      speed: 85 + Math.random() * 55, len: 8 + Math.random() * 10,
+      phase: Math.random() * Math.PI * 2, heavy: false,
+    }));
+
+    const stormClouds = [
+      { ox: 0,   oy: 0,  spd: 5,   sc: 1.2, a: .80 },
+      { ox: 110, oy: 5,  spd: 7,   sc: 1.0, a: .75 },
+      { ox: 240, oy: -3, spd: 6,   sc: 1.3, a: .80 },
+      { ox: 370, oy: 8,  spd: 5.5, sc: 1.1, a: .75 },
+      { ox: -50, oy: 3,  spd: 6,   sc: .90, a: .70 },
+      { ox: 490, oy: 1,  spd: 5.8, sc: 1.0, a: .72 },
+      { ox: 600, oy: 6,  spd: 6.5, sc: 1.15, a: .76 },
+    ];
+    const stormDrops = Array.from({ length: 190 }, () => ({
+      x: Math.random() * CW, y: Math.random() * BOARD_Y,
+      speed: 115 + Math.random() * 75, len: 9 + Math.random() * 13,
+      phase: Math.random() * Math.PI * 2, heavy: Math.random() > .45,
+    }));
+    const bolt = makeBolt();
+    let nextBoltT = 1.8 + Math.random() * 2;
+
+    let startTime = null;
+
+    function tick(now) {
       if (!alive) return;
+      if (!startTime) startTime = now;
+      const t = (now - startTime) / 1000;
+
       const score   = scoreRef.current;
       const hs      = scoreToHs(score);
       const spd     = .01 + hs * .07;
-      ph1 += spd; ph2 += spd*1.13; ph3 += spd*.79;
+      ph1 += spd; ph2 += spd * 1.13; ph3 += spd * .79;
 
-      // Use real tide data if available; fall back to slow sine animation
       const { tideCurrentFt, nextHilos } = tideRef.current;
       const realPct = realTidePct(tideCurrentFt, nextHilos);
       let tideLevel, tideOffset;
@@ -297,12 +510,80 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = nu
       const color   = COLORS[Math.round(score)];
       const [r, g, b] = hexRgb(color);
 
-      // Sky background
+      // Sky condition
+      const wind = windRef.current;
+      const { skyCover: sc, shortForecast: sf, precipProbability: pp } = skyRef.current;
+      const skyKey = skyFromData(wind, sc, sf, pp);
+
+      // Sky background gradient
+      const skyTop = SKY_TOPS[skyKey] || '#0d1b2a';
+      const skyBot = SKY_BOTS[skyKey] || '#0e2236';
       const sk = ctx.createLinearGradient(0, 0, 0, BOARD_Y + tideOffset);
-      sk.addColorStop(0, '#0d1b2a');
-      sk.addColorStop(1, '#0e2236');
+      sk.addColorStop(0, skyTop);
+      sk.addColorStop(1, skyBot);
       ctx.fillStyle = sk;
       ctx.fillRect(0, 0, CW, CH);
+
+      // Animated sky elements
+      if (skyKey === 'sunny') {
+        const haze = ctx.createLinearGradient(0, BOARD_Y - 50, 0, BOARD_Y + tideOffset);
+        haze.addColorStop(0, 'rgba(255,160,40,0)');
+        haze.addColorStop(1, 'rgba(255,140,20,.07)');
+        ctx.fillStyle = haze;
+        ctx.fillRect(0, BOARD_Y - 50, CW, 50 + Math.max(0, tideOffset));
+        drawSun(ctx, 68, 46, 21, t);
+
+      } else if (skyKey === 'partly') {
+        const sunX = 68, sunY = 46;
+        const covered = partlyClouds.some(c => {
+          const cx = cloudX(c.ox, c.spd, t);
+          return Math.hypot(cx - sunX, c.oy + 30 - sunY) < 55;
+        });
+        if (!covered) {
+          drawSun(ctx, sunX, sunY, 19, t);
+        } else {
+          const eg = ctx.createRadialGradient(sunX, sunY, 12, sunX, sunY, 52);
+          eg.addColorStop(0, 'rgba(255,210,70,.3)');
+          eg.addColorStop(1, 'rgba(255,170,0,0)');
+          ctx.fillStyle = eg;
+          ctx.beginPath(); ctx.arc(sunX, sunY, 52, 0, Math.PI * 2); ctx.fill();
+        }
+        for (const c of partlyClouds) {
+          drawCloud(ctx, cloudX(c.ox, c.spd, t), c.oy + 28, c.sc, c.a);
+        }
+
+      } else if (skyKey === 'overcast') {
+        for (const c of overcastHi) drawCloud(ctx, cloudX(c.ox, c.spd, t), c.oy + 8,  c.sc, c.a);
+        for (const c of overcastLo) drawCloud(ctx, cloudX(c.ox, c.spd, t), c.oy + 18, c.sc, c.a * .75);
+        const ceil = ctx.createLinearGradient(0, 0, 0, 75);
+        ceil.addColorStop(0, 'rgba(160,180,200,.16)');
+        ceil.addColorStop(1, 'rgba(140,160,185,0)');
+        ctx.fillStyle = ceil;
+        ctx.fillRect(0, 0, CW, 75);
+
+      } else if (skyKey === 'rain') {
+        for (const c of rainClouds) drawCloud(ctx, cloudX(c.ox, c.spd, t), c.oy + 8, c.sc, c.a);
+        drawRainLines(ctx, rainDrops, t);
+        const mist = ctx.createLinearGradient(0, BOARD_Y - 28, 0, BOARD_Y + tideOffset);
+        mist.addColorStop(0, 'rgba(100,145,185,0)');
+        mist.addColorStop(1, 'rgba(90,130,170,.1)');
+        ctx.fillStyle = mist;
+        ctx.fillRect(0, BOARD_Y - 28, CW, 28 + Math.max(0, tideOffset));
+
+      } else if (skyKey === 'storm') {
+        for (const c of stormClouds) drawCloud(ctx, cloudX(c.ox, c.spd, t), c.oy + 4, c.sc, c.a);
+        drawRainLines(ctx, stormDrops, t, 1.5, true);
+        if (!bolt.active && t > nextBoltT) {
+          Object.assign(bolt, makeBolt());
+          bolt.active = true; bolt.startT = t;
+          nextBoltT = t + 2.5 + Math.random() * 4;
+        }
+        drawLightning(ctx, bolt, t);
+
+      } else if (skyKey === 'night') {
+        drawStars(ctx, stars, t);
+        drawMoon(ctx, CW - 68, 52, 28, phase, t);
+      }
 
       // Wave fill
       ctx.beginPath();
@@ -327,19 +608,6 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = nu
       // Tide gauge
       drawTideGauge(ctx, color, tideLevel);
 
-      // Weather overlay (top-left)
-      const wind = windRef.current;
-      const { skyCover: sc, shortForecast: sf, precipProbability: pp } = skyRef.current;
-      const skyKey = skyFromData(wind, sc, sf, pp);
-      const skyLabel = SKY_LABELS[skyKey] || '';
-      ctx.save();
-      ctx.font = '600 11px system-ui';
-      ctx.textAlign = 'left';
-      ctx.fillStyle = 'rgba(200,223,240,0.55)';
-      if (skyLabel) ctx.fillText(skyLabel, 14, 20);
-      if (wind != null && wind > 0) ctx.fillText(`Wind ${Math.round(wind)} kt`, 14, 37);
-      ctx.restore();
-
       // Sprite figure
       if (_spriteLoaded) {
         const pi = poseOf(score);
@@ -359,10 +627,20 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = nu
         ctx.restore();
       }
 
+      // Weather text overlay (drawn last so it's always on top)
+      const skyLabel = SKY_LABELS[skyKey] || '';
+      ctx.save();
+      ctx.font = '600 11px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(200,223,240,0.55)';
+      if (skyLabel) ctx.fillText(skyLabel, 14, 20);
+      if (wind != null && wind > 0) ctx.fillText(`Wind ${Math.round(wind)} kt`, 14, 37);
+      ctx.restore();
+
       rafRef.current = requestAnimationFrame(tick);
     }
 
-    ensureSprite(() => {}); // kick off load; sprite check inside tick
+    ensureSprite(() => {});
     rafRef.current = requestAnimationFrame(tick);
 
     return () => {
