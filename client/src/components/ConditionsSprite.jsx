@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 // ─── scene constants (mirrors demo-paddler5) ─────────────────────────────────
-const CW = 540, CH = 270, CX = 250, BOARD_Y = 225, DRAW_H = 195;
+const CW = 540, CH = 270, CX = 250, BOARD_Y = 225, DRAW_H = 125;
 const WAVE_FREQ = 0.015, TIDE_RANGE = 22;
 const CROP_PAD_TOP = 28, CROP_PAD_LEFT = 12, CROP_PAD_RIGHT = 2, CROP_PAD_BOTTOM = 12;
 const BOARD_SINK = 14;
