@@ -20,6 +20,8 @@ import WebcamPanel from './components/WebcamPanel.jsx';
 import InstallNudge from './components/InstallNudge.jsx';
 import ReportButton from './components/ReportButton.jsx';
 import ConditionsSprite from './components/ConditionsSprite.jsx';
+import ConditionsHistory from './components/ConditionsHistory.jsx';
+import InsightsPanel from './components/InsightsPanel.jsx';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 const POLL_MS = 5 * 60 * 1000; // 5 minutes
@@ -251,8 +253,14 @@ export default function App() {
           </div>
         )}
 
+        {/* Glass history timeline */}
+        <ConditionsHistory />
+
         {/* Report button */}
         <ReportButton />
+
+        {/* Model calibration */}
+        <InsightsPanel />
 
         {/* Data sources footer */}
         {data?.sources && (
