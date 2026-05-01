@@ -1,42 +1,224 @@
 import { useEffect, useRef } from 'react';
-import { scoreColor } from '../utils.js';
 
-const W = 320, H = 100, WL = 64; // viewBox dims, waterline y
+// ─── scene constants (mirrors demo-paddler5) ─────────────────────────────────
+const CW = 540, CH = 270, CX = 250, BOARD_Y = 225, DRAW_H = 195;
+const WAVE_FREQ = 0.015, TIDE_RANGE = 22;
+const CROP_PAD_TOP = 28, CROP_PAD_LEFT = 12, CROP_PAD_RIGHT = 2, CROP_PAD_BOTTOM = 12;
+const BOARD_SINK = 14;
+const GRID_COLS = 5;
 
-// Wave math — three independent components with trochoidal shaping + grouping envelope.
-// ph1/ph2/ph3 advance at different speeds so the pattern never repeats cleanly.
-function wy(x, amp, freq, ph1, ph2, ph3) {
-  // Trochoidal primary: sin - 0.22*sin(2θ) gives sharper crests, flatter troughs
-  const primary   = amp * (Math.sin(x * freq + ph1) - 0.22 * Math.sin(2 * x * freq + 2 * ph1));
-  // Secondary chop — independent phase, slightly higher freq
-  const secondary = amp * 0.30 * Math.sin(x * freq * 1.63 + ph2);
-  // Tertiary texture — smallest, adds surface roughness
-  const tertiary  = amp * 0.13 * Math.sin(x * freq * 2.71 + ph3);
-  // Grouping envelope — waves arrive in sets (0.78–1.0 modulation)
-  const group     = 0.78 + 0.22 * Math.sin(x * freq * 0.28 + ph1 * 0.11);
-  return WL + group * (primary + secondary + tertiary);
+// score → [col, row] in paddler-sprites.png
+const POSE_SPRITES = [[0,0],[1,0],[2,0],[3,0],[4,0]];
+const COLORS = ['#ff2b55','#ff2b55','#ff6b1a','#ff6b1a','#ffc300','#ffc300','#7dff4f','#7dff4f','#00e887','#00e887','#00e887'];
+
+function poseOf(s)     { return s>=9?4:s>=7?3:s>=5?2:s>=3?1:0; }
+function scoreToHs(s)  { return [.60,.52,.44,.34,.26,.20,.14,.09,.05,.03,.02][Math.round(s)]; }
+function hexRgb(h)     { return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
+
+// ─── sprite singleton (one load per page) ────────────────────────────────────
+let _spriteImg    = null;
+let _spriteLoaded = false;
+let _figureCrops  = null;
+const _spriteCache   = {};
+const _tmpCanvas     = document.createElement('canvas');
+const _tmpCtx        = _tmpCanvas.getContext('2d', { willReadFrequently: true });
+const _pendingReady  = [];
+let   _loadStarted   = false;
+
+function ensureSprite(cb) {
+  if (_spriteLoaded) { cb(); return; }
+  _pendingReady.push(cb);
+  if (_loadStarted) return;
+  _loadStarted = true;
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    _spriteImg = img; _spriteLoaded = true;
+    _detectFigureCrops();
+    _pendingReady.splice(0).forEach(fn => fn());
+  };
+  img.onerror = () => { _loadStarted = false; _pendingReady.splice(0); };
+  img.src = '/paddler-sprites.png';
 }
-function wPath(amp, freq, ph1, ph2, ph3, closed, w = W) {
-  let d = `M 0 ${WL}`;
-  for (let x = 0; x <= w; x += 3) d += ` L ${x} ${wy(x, amp, freq, ph1, ph2, ph3).toFixed(2)}`;
-  return closed ? d + ` L ${w} ${H} L 0 ${H} Z` : d;
+
+function _detectFigureCrops() {
+  const img = _spriteImg;
+  const W = img.naturalWidth, H = img.naturalHeight;
+  const dc = document.createElement('canvas');
+  dc.width = W; dc.height = H;
+  const dctx = dc.getContext('2d', { willReadFrequently: true });
+  dctx.drawImage(img, 0, 0);
+
+  function scanRow(y) {
+    const row = dctx.getImageData(0, y, W, 1).data;
+    const spans = []; let s = -1;
+    for (let x = 0; x < W; x++) {
+      const a = row[x*4+3];
+      if (a > 10 && s === -1) s = x;
+      if (a <= 10 && s !== -1) { spans.push([s, x-1]); s = -1; }
+    }
+    if (s !== -1) spans.push([s, W-1]);
+    const m = [];
+    for (const sp of spans) {
+      if (m.length && sp[0] - m[m.length-1][1] <= 60) m[m.length-1][1] = sp[1];
+      else m.push([...sp]);
+    }
+    return m;
+  }
+
+  let bestGroups = [], bestDiff = Infinity;
+  for (let y = Math.round(0.55*H); y <= Math.round(0.82*H); y += 4) {
+    const g = scanRow(y);
+    const diff = Math.abs(g.length - GRID_COLS);
+    if (g.length > 0 && (diff < bestDiff || (diff === bestDiff && g.length > bestGroups.length))) {
+      bestGroups = g; bestDiff = diff;
+    }
+    if (bestDiff === 0) break;
+  }
+  if (bestGroups.length === 0) return;
+
+  const n = bestGroups.length;
+  const zoneBounds = [0];
+  for (let i = 0; i < n - 1; i++)
+    zoneBounds.push(Math.round((bestGroups[i][1] + bestGroups[i+1][0]) / 2));
+  zoneBounds.push(W);
+
+  const fullData = dctx.getImageData(0, 0, W, H).data;
+
+  const rowBoundaries = []; let globalYMin = H, globalYMax = 0;
+  for (let i = 0; i < n; i++) {
+    const midX = Math.round((bestGroups[i][0] + bestGroups[i][1]) / 2);
+    let colYMin = -1, colYMax = 0, gapStart = -1, gapMid = -1, inFig = false;
+    for (let y = 0; y < H; y++) {
+      const a = fullData[(y * W + midX) * 4 + 3] > 10;
+      if (a && colYMin === -1) colYMin = y;
+      if (a) colYMax = y;
+      if (inFig && !a) gapStart = y;
+      if (!inFig && a && gapStart !== -1 && y - gapStart > 20) { gapMid = Math.round((gapStart + y) / 2); gapStart = -1; }
+      inFig = a;
+    }
+    if (colYMin !== -1) { if (colYMin < globalYMin) globalYMin = colYMin; if (colYMax > globalYMax) globalYMax = colYMax; }
+    if (gapMid !== -1) rowBoundaries.push(gapMid);
+  }
+  const hasRows  = rowBoundaries.length > 0;
+  const rowSplit = hasRows ? rowBoundaries.sort((a,b)=>a-b)[Math.floor(rowBoundaries.length/2)] : null;
+  const yRanges  = hasRows ? [[globalYMin, rowSplit],[rowSplit, globalYMax]] : [[globalYMin, globalYMax]];
+
+  _figureCrops = [[], []];
+  for (let i = 0; i < n; i++) {
+    const xL = zoneBounds[i], xR = zoneBounds[i+1];
+    yRanges.forEach(([y0, y1], rowIdx) => {
+      let xMin = W, xMax = 0, yMin = H, yMax = 0;
+      const y0c = Math.max(0, y0), y1c = Math.min(H, y1);
+      for (let y = y0c; y < y1c; y++)
+        for (let x = xL; x < xR; x++)
+          if (fullData[(y*W+x)*4+3] > 10) {
+            if (x < xMin) xMin = x; if (x > xMax) xMax = x;
+            if (y < yMin) yMin = y; if (y > yMax) yMax = y;
+          }
+
+      if (xMax >= xMin) {
+        const MIN_COL = 10;
+        for (let x = xMax; x > xMin; x--) {
+          let k = 0;
+          for (let y = y0c; y < y1c; y++) if (fullData[(y*W+x)*4+3] > 10 && ++k >= MIN_COL) break;
+          if (k >= MIN_COL) { xMax = x; break; }
+        }
+        for (let x = xMin; x < xMax; x++) {
+          let k = 0;
+          for (let y = y0c; y < y1c; y++) if (fullData[(y*W+x)*4+3] > 10 && ++k >= MIN_COL) break;
+          if (k >= MIN_COL) { xMin = x; break; }
+        }
+        let yMinF = H, yMaxF = 0;
+        for (let y = y0c; y < y1c; y++)
+          for (let x = xMin; x <= xMax; x++)
+            if (fullData[(y*W+x)*4+3] > 10) { if (y < yMinF) yMinF = y; if (y > yMaxF) yMaxF = y; }
+        if (yMaxF >= yMinF) { yMin = yMinF; yMax = yMaxF; }
+
+        const sx = Math.max(0, xMin - CROP_PAD_LEFT);
+        const sy = Math.max(0, yMin - CROP_PAD_TOP);
+        _figureCrops[rowIdx].push({ sx, sy,
+          sw: Math.min(xR, xMax + CROP_PAD_RIGHT) - sx,
+          sh: Math.min(H,  yMax + CROP_PAD_BOTTOM) - sy,
+        });
+      } else {
+        _figureCrops[rowIdx].push({ sx: xL, sy: y0, sw: xR - xL, sh: y1 - y0 });
+      }
+    });
+    if (!hasRows) _figureCrops[1].push(_figureCrops[0][i]);
+  }
 }
 
-// SVG element helper (works in DOM, not JSX)
-function E(tag, attrs) {
-  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
-  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
-  return el;
+function _getCropRect(col, row) {
+  if (_figureCrops?.[row]?.[col]) return _figureCrops[row][col];
+  const colW = _spriteImg.naturalWidth  / GRID_COLS;
+  const rowH = _spriteImg.naturalHeight / 2;
+  return { sx: col * colW, sy: row * rowH, sw: colW, sh: rowH };
 }
 
-function scoreToParams(score) {
-  if (score >= 8) return { amp: 1.5, freq: 0.042, spd: 0.007, pose: 'glass' };
-  if (score >= 6) return { amp: 3.5, freq: 0.052, spd: 0.013, pose: 'ripple' };
-  if (score >= 4) return { amp: 8,   freq: 0.068, spd: 0.022, pose: 'chop' };
-  if (score >= 2) return { amp: 14,  freq: 0.082, spd: 0.033, pose: 'rough' };
-  return              { amp: 18,  freq: 0.095, spd: 0.045, pose: 'nogo' };
+function _colorizeSprite(col, row, hexColor) {
+  const key = `${col},${row},${hexColor}`;
+  if (_spriteCache[key]) return _spriteCache[key];
+  const { sx, sy, sw, sh } = _getCropRect(col, row);
+  _tmpCanvas.width = sw; _tmpCanvas.height = sh;
+  _tmpCtx.clearRect(0, 0, sw, sh);
+  _tmpCtx.drawImage(_spriteImg, sx, sy, sw, sh, 0, 0, sw, sh);
+  const id = _tmpCtx.getImageData(0, 0, sw, sh);
+  const d  = id.data;
+  const [r, g, b] = hexRgb(hexColor);
+  for (let i = 0; i < d.length; i += 4) {
+    const brightness = (d[i] + d[i+1] + d[i+2]) / 3;
+    const srcAlpha   = d[i+3] / 255;
+    d[i] = r; d[i+1] = g; d[i+2] = b;
+    d[i+3] = Math.max(0, Math.round((255 - brightness) * srcAlpha));
+  }
+  _tmpCtx.putImageData(id, 0, 0);
+  const out = document.createElement('canvas');
+  out.width = sw; out.height = sh;
+  out.getContext('2d').drawImage(_tmpCanvas, 0, 0);
+  const result = { canvas: out, w: sw, h: sh };
+  _spriteCache[key] = result;
+  return result;
 }
 
+// ─── wave / tide helpers ─────────────────────────────────────────────────────
+function wy(x, ph1, ph2, ph3, waveAmp, tideOffset) {
+  const p2 = waveAmp * (Math.sin(x*WAVE_FREQ+ph1) - .22*Math.sin(2*x*WAVE_FREQ+2*ph1));
+  const s2 = waveAmp * .30 * Math.sin(x*WAVE_FREQ*1.63+ph2);
+  const t2 = waveAmp * .13 * Math.sin(x*WAVE_FREQ*2.71+ph3);
+  const gv = .78 + .22 * Math.sin(x*WAVE_FREQ*.28+ph1*.11);
+  return BOARD_Y + tideOffset + gv*(p2+s2+t2);
+}
+
+function drawTideGauge(ctx, color, tideLevel) {
+  const [r, g, b] = hexRgb(color);
+  const gx = CW - 18, gy = 14, gw = 8, gh = CH - 28;
+  const fill = gh * tideLevel;
+
+  ctx.fillStyle = 'rgba(0,0,0,.25)';
+  ctx.beginPath(); ctx.roundRect(gx, gy, gw, gh, 4); ctx.fill();
+
+  const gg = ctx.createLinearGradient(0, gy + gh, 0, gy);
+  gg.addColorStop(0, `rgba(${r},${g},${b},.12)`);
+  gg.addColorStop(1, `rgba(${r},${g},${b},.55)`);
+  ctx.fillStyle = gg;
+  ctx.beginPath(); ctx.roundRect(gx, gy + gh - fill, gw, fill, [0,0,4,4]); ctx.fill();
+
+  const ly = gy + gh - fill;
+  ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = .9;
+  ctx.beginPath(); ctx.moveTo(gx - 2, ly); ctx.lineTo(gx + gw + 2, ly); ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  ctx.font = '600 7px system-ui'; ctx.textAlign = 'center';
+  ctx.fillStyle = `rgba(${r},${g},${b},.7)`;  ctx.fillText('HT', gx + gw/2, gy - 3);
+  ctx.fillStyle = 'rgba(200,223,240,.3)';       ctx.fillText('LT', gx + gw/2, gy + gh + 9);
+  ctx.fillStyle = `rgba(${r},${g},${b},.85)`;
+  ctx.font = '700 8px system-ui';
+  ctx.fillText(Math.round(tideLevel * 100) + '%', gx + gw/2, ly - 4);
+  ctx.textAlign = 'left';
+}
+
+// ─── sky condition helper (exported — used by tests) ─────────────────────────
 function isNightNow() {
   const hour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }));
   return hour >= 20 || hour < 6;
@@ -44,12 +226,9 @@ function isNightNow() {
 
 export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbability) {
   if (isNightNow()) return 'night';
-
   const forecastText = (shortForecast || '').toLowerCase();
-  const isRaining = /rain|shower|drizzle/.test(forecastText) ||
-                    (precipProbability != null && precipProbability > 50);
+  const isRaining = /rain|shower|drizzle/.test(forecastText) || (precipProbability != null && precipProbability > 50);
   const isThunder = /thunder/.test(forecastText);
-
   if (isThunder) return 'storm';
   if (skyCover == null) return isRaining ? 'rain' : 'sunny';
   if (skyCover <= 15) return 'sunny';
@@ -58,233 +237,125 @@ export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbabil
   return isRaining ? 'rain' : 'overcast';
 }
 
-// Build wireframe paddler into a <g> element
-const FC = '#c8dff0', TC = '#e2eef7', PC = '#d0e8f8';
+const SKY_LABELS = { sunny: 'Sunny', partly: 'Partly cloudy', overcast: 'Overcast', rain: 'Rain', storm: 'Storm', night: 'Night' };
 
-function poly(pts, stroke, sw = 2) {
-  return E('polyline', { points: pts.map(p => p.join(',')).join(' '), fill: 'none', stroke, 'stroke-width': sw, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
-}
-function ln(x1, y1, x2, y2, stroke, sw = 1.4) {
-  return E('line', { x1, y1, x2, y2, stroke, 'stroke-width': sw, 'stroke-linecap': 'round' });
-}
-
-function buildPaddler(g, pose, color) {
-  // Board
-  g.appendChild(E('path', { d: 'M -20 0 C -20 -3,-10 -4.5,0 -4 C 10 -4.5,22 -3,22 0 C 22 3,10 4.5,0 4 C -10 4.5,-20 3,-20 0 Z', fill: '#b8d4e8', opacity: '0.9' }));
-  g.appendChild(E('path', { d: 'M -13 -1 C -4 -2.5,8 -2.5,18 -1', fill: 'none', stroke: '#7aafcf', 'stroke-width': '0.8', opacity: '0.5', 'stroke-linecap': 'round' }));
-
-  const blade = d => { const el = E('path', { d, fill: color, opacity: '0.82' }); return el; };
-  const shaft = (x1,y1,x2,y2) => ln(x1,y1,x2,y2, PC, 1.4);
-  const grip  = (x1,y1,x2,y2) => ln(x1,y1,x2,y2, PC, 2.0);
-
-  if (pose === 'glass') {
-    g.appendChild(poly([[-3,-3],[-4,-1],[-4,0]], FC));
-    g.appendChild(poly([[3,-3],[4,-1],[4,0]], FC));
-    g.appendChild(ln(0,-4, 0,-14, TC, 2.5));
-    g.appendChild(E('circle', { cx:0, cy:-17.5, r:3, fill:TC }));
-    g.appendChild(poly([[-1,-13],[-7,-11],[-9,-8]], TC));
-    g.appendChild(poly([[1,-12],[6,-10],[9,-7]], TC));
-    g.appendChild(shaft(7,-17, 12,4));
-    g.appendChild(grip(4,-19, 10,-16));
-    g.appendChild(blade('M 11 3 C 9 6,9 11,12 13 C 15 11,16 6,11 3 Z'));
-
-  } else if (pose === 'ripple') {
-    g.appendChild(poly([[-3,-3.5],[-5,-1.5],[-5,0]], FC));
-    g.appendChild(poly([[3,-3.5],[5,-1.5],[5,0]], FC));
-    g.appendChild(ln(0,-4, -1,-13, TC, 2.5));
-    g.appendChild(E('circle', { cx:-1, cy:-16.5, r:3, fill:TC }));
-    g.appendChild(poly([[0,-12],[6,-17],[10,-15]], TC));
-    g.appendChild(poly([[-1,-11],[4,-8],[9,-4]], TC));
-    g.appendChild(shaft(10,-17, 13,2));
-    g.appendChild(grip(7,-19, 13,-16));
-    g.appendChild(blade('M 12 1 C 10 4,10 9,13 11 C 16 9,17 4,12 1 Z'));
-
-  } else if (pose === 'chop') {
-    g.appendChild(poly([[-4,-4],[-7,-1],[-6,0]], FC));
-    g.appendChild(poly([[4,-4],[7,-1],[6,0]], FC));
-    g.appendChild(ln(0,-5, -2,-13, TC, 2.5));
-    g.appendChild(E('circle', { cx:-2, cy:-16.5, r:3, fill:TC }));
-    g.appendChild(poly([[-1,-12],[5,-16],[10,-13]], TC));
-    g.appendChild(poly([[-1,-10],[4,-6],[9,-3]], TC));
-    g.appendChild(shaft(10,-15, 12,2));
-    g.appendChild(grip(7,-17, 13,-14));
-    g.appendChild(blade('M 11 1 C 9 4,9 9,12 11 C 15 9,16 4,11 1 Z'));
-    g.appendChild(E('path', { d:'M 9 8 Q 7 5,8 3', fill:'none', stroke:'#fff', 'stroke-width':'0.7', opacity:'0.25', 'stroke-linecap':'round' }));
-
-  } else if (pose === 'rough') {
-    g.appendChild(poly([[-5,-3],[-9,-1],[-8,0]], FC));
-    g.appendChild(poly([[5,-3],[9,-1],[8,0]], FC));
-    g.appendChild(ln(0,-4, -3,-11, TC, 2.5));
-    g.appendChild(E('circle', { cx:-4, cy:-14, r:3, fill:TC }));
-    g.appendChild(poly([[-2,-10],[-9,-9],[-12,-6]], TC));
-    g.appendChild(poly([[-1,-9],[5,-7],[9,-5]], TC));
-    g.appendChild(ln(-10,-8, 10,0, PC, 1.4));
-    g.appendChild(grip(7,-5, 13,-3));
-    g.appendChild(blade('M 10 -1 C 8 2,9 6,11 7 C 14 6,15 2,10 -1 Z'));
-
-  } else { // nogo
-    g.appendChild(E('path', { d:'M -16 2 C -16 -1,-8 -3,0 -2.5 C 8 -3,16 -1,16 2 C 16 4,8 5.5,0 5 C -8 5.5,-16 4,-16 2 Z', fill:'#b8d4e8', opacity:'0.6', transform:'rotate(-25,0,0)' }));
-    g.appendChild(E('circle', { cx:4, cy:-15, r:3, fill:TC }));
-    g.appendChild(ln(2,-4, 5,-12, TC, 2.5));
-    g.appendChild(poly([[3,-11],[-4,-16],[-7,-13]], TC));
-    g.appendChild(poly([[4,-11],[11,-15],[13,-12]], TC));
-    g.appendChild(poly([[-1,-4],[-6,1],[-4,2]], FC));
-    g.appendChild(poly([[3,-4],[8,0],[6,1]], FC));
-    g.appendChild(ln(-5,-11, -14,-4, PC, 1.3));
-    g.appendChild(blade('M -14 -3 C -16 -1,-17 3,-14 4 C -11 3,-11 -1,-14 -3 Z'));
-  }
-}
-
+// ─── component ────────────────────────────────────────────────────────────────
 export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = null, shortForecast = null, precipProbability = null }) {
-  const svgRef = useRef(null);
-  const stateRef = useRef(null);
+  const canvasRef  = useRef(null);
+  const scoreRef   = useRef(score ?? 0);
+  const windRef    = useRef(windSpeedKt ?? 0);
+  const skyRef     = useRef({ skyCover, shortForecast, precipProbability });
+  const rafRef     = useRef(null);
+
+  useEffect(() => { scoreRef.current = score ?? 0; }, [score]);
+  useEffect(() => { windRef.current = windSpeedKt ?? 0; }, [windSpeedKt]);
+  useEffect(() => { skyRef.current = { skyCover, shortForecast, precipProbability }; }, [skyCover, shortForecast, precipProbability]);
 
   useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    svg.innerHTML = '';
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
 
-    const color = scoreColor(score ?? 0);
-    const { amp, freq, spd, pose } = scoreToParams(score ?? 0);
-    const sky = skyFromData(windSpeedKt, skyCover, shortForecast, precipProbability);
+    let ph1 = Math.random()*Math.PI*2;
+    let ph2 = Math.random()*Math.PI*2;
+    let ph3 = Math.random()*Math.PI*2;
+    let tidePhase = 0, tideLevel = 0.5, tideOffset = 0;
+    let alive = true;
 
-    // Sky gradient bg
-    const defs = E('defs', {});
-    const skyGrad = E('linearGradient', { id: 'cs-sky', x1:'0', y1:'0', x2:'0', y2:'1' });
-    const skyColors = score >= 6 ? ['#1050a0','#1a6080'] : score >= 3 ? ['#121e30','#1a2840'] : ['#080c18','#0f1420'];
-    skyGrad.appendChild(Object.assign(E('stop', { offset:'0%' }), { }));
-    skyGrad.setAttribute('id', 'cs-sky');
-    [['0%', skyColors[0]], ['100%', skyColors[1]]].forEach(([o, c]) => {
-      const s = E('stop', { offset: o }); s.setAttribute('stop-color', c); skyGrad.appendChild(s);
-    });
-    const seaGrad = E('linearGradient', { id: 'cs-sea', x1:'0', y1:'0', x2:'0', y2:'1' });
-    const seaColors = score >= 6 ? ['#0d8870','#095548'] : score >= 3 ? ['#1a3858','#0e2438'] : ['#580a14','#3a0810'];
-    [['0%', seaColors[0]], ['100%', seaColors[1]]].forEach(([o, c]) => {
-      const s = E('stop', { offset: o }); s.setAttribute('stop-color', c); seaGrad.appendChild(s);
-    });
-    defs.appendChild(skyGrad); defs.appendChild(seaGrad);
-    svg.appendChild(defs);
-
-    svg.appendChild(E('rect', { x:0, y:0, width:W, height:H, fill:'url(#cs-sky)' }));
-
-    // Sun / Moon
-    let sunEl = null;
-    if (sky === 'night') {
-      // crescent moon
-      const mg = E('g', { transform:'translate(292,18)' });
-      mg.appendChild(E('circle', { cx:0, cy:0, r:9, fill:'#c8d8f0', opacity:'0.9' }));
-      mg.appendChild(E('circle', { cx:5, cy:-3, r:7, fill: skyColors[1] }));
-      svg.appendChild(mg);
-    } else if (sky === 'sunny' || sky === 'partly') {
-      const sg = E('g', { transform:'translate(292,18)' });
-      for (let i = 0; i < 8; i++) {
-        const a = i / 8 * Math.PI * 2, r1 = sky==='sunny'?10:8, r2 = sky==='sunny'?14:11;
-        sg.appendChild(E('line', { x1:Math.cos(a)*r1, y1:Math.sin(a)*r1, x2:Math.cos(a)*r2, y2:Math.sin(a)*r2, stroke:'#ffd040', 'stroke-width': sky==='sunny'?'2':'1.5', 'stroke-linecap':'round', opacity: sky==='sunny'?'0.9':'0.65' }));
-      }
-      sg.appendChild(E('circle', { cx:0, cy:0, r: sky==='sunny'?8:6, fill:'#ffd040', opacity: sky==='sunny'?'1':'0.8' }));
-      svg.appendChild(sg);
-      sunEl = sg;
-    }
-
-    // Clouds
-    function mkCloud(cx, cy, sc) {
-      const cc = score < 3 ? '#1e2530' : '#2a3a4f';
-      [[0,0,sc],[sc*.7,-sc*.3,sc*.72],[-sc*.65,-sc*.2,sc*.55],[sc*.1,sc*.2,sc*.85]].forEach(([dx,dy,r]) => {
-        const el = E('circle', { cx:cx+dx, cy:cy+dy, r, fill:cc, opacity:'0.65' });
-        svg.appendChild(el);
-      });
-    }
-    if (sky === 'partly') mkCloud(240, 20, 11);
-    if (sky === 'overcast') { mkCloud(50, 18, 14); mkCloud(180, 13, 12); mkCloud(270, 20, 9); }
-    if (sky === 'rain' || sky === 'storm') { mkCloud(30, 16, 16); mkCloud(155, 11, 15); mkCloud(270, 17, 11); }
-
-    // Lightning
-    let boltEl = null;
-    if (sky === 'storm') {
-      boltEl = E('path', { d:'M 180 10 L 174 20 L 178 20 L 172 32 L 184 18 L 180 18 Z', fill:'#ffe040', opacity:'0.9' });
-      svg.appendChild(boltEl);
-    }
-
-    // Sea bg
-    svg.appendChild(E('rect', { x:0, y:WL, width:W, height:H-WL, fill:'url(#cs-sea)' }));
-
-    // Fish (calm only)
-    if (score >= 7) {
-      [[80,82],[140,86],[200,80]].forEach(([fx,fy]) => {
-        const fg = E('g', { transform:`translate(${fx},${fy})`, opacity:'0.25' });
-        fg.appendChild(E('ellipse', { cx:0, cy:0, rx:7, ry:2.5, fill:'#60c8b8' }));
-        fg.appendChild(E('path', { d:'M -7 0 L -11 -2.5 L -11 2.5 Z', fill:'#60c8b8' }));
-        fg.appendChild(E('circle', { cx:4, cy:-0.8, r:0.9, fill:'#060d1f' }));
-        svg.appendChild(fg);
-      });
-    }
-
-    // Rain drops
-    const rainDrops = [];
-    const rainCount = (sky === 'rain' || sky === 'storm') ? 18 : 0;
-    for (let i = 0; i < rainCount; i++) {
-      const d = E('line', { stroke:'#88b8d8', 'stroke-width':'0.8', 'stroke-linecap':'round', opacity:'0.4' });
-      svg.appendChild(d);
-      rainDrops.push({ el:d, x:Math.random()*W, y:Math.random()*H, spd:3+Math.random()*2 });
-    }
-
-    // Wave layers
-    const wFill = E('path', { fill: color + '20' });
-    const wLine = E('path', { fill:'none', stroke: color + 'aa', 'stroke-width':'1.5' });
-    svg.appendChild(wFill);
-    svg.appendChild(wLine);
-
-    // Figure
-    const figG = E('g', {});
-    buildPaddler(figG, pose, color);
-    svg.appendChild(figG);
-
-    // Store animation state — three independent phases advance at different rates
-    const r = () => Math.random() * Math.PI * 2;
-    stateRef.current = { amp, freq, spd, color, ph1: r(), ph2: r(), ph3: r(), sunRot:0, wFill, wLine, figG, sunEl, boltEl, rainDrops };
-
-    let raf;
     function tick() {
-      const s = stateRef.current;
-      if (!s) return;
-      s.ph1 += s.spd;          // primary wave speed
-      s.ph2 += s.spd * 1.13;   // secondary slightly faster
-      s.ph3 += s.spd * 0.79;   // tertiary slower
-      s.sunRot += 0.25;
+      if (!alive) return;
+      const score   = scoreRef.current;
+      const hs      = scoreToHs(score);
+      const spd     = .01 + hs * .07;
+      ph1 += spd; ph2 += spd*1.13; ph3 += spd*.79;
+      tidePhase += (2 * Math.PI) / 5400;
+      tideLevel  = 0.5 + 0.5 * Math.sin(tidePhase);
+      tideOffset = TIDE_RANGE * (0.5 - tideLevel);
 
-      s.wFill.setAttribute('d', wPath(s.amp, s.freq, s.ph1, s.ph2, s.ph3, true));
-      s.wLine.setAttribute('d', wPath(s.amp, s.freq, s.ph1, s.ph2, s.ph3, false));
+      const waveAmp = Math.max(hs * 45 * .5, 0.6);
+      const color   = COLORS[Math.round(score)];
+      const [r, g, b] = hexRgb(color);
 
-      const fx = 130, fy = wy(fx, s.amp, s.freq, s.ph1, s.ph2, s.ph3);
-      const slope = (wy(fx+2, s.amp, s.freq, s.ph1, s.ph2, s.ph3) - fy) / 2;
-      const tilt = Math.atan(slope) * (180/Math.PI) * 0.45;
-      s.figG.setAttribute('transform', `translate(${fx},${fy.toFixed(2)}) rotate(${tilt.toFixed(2)})`);
+      // Sky background
+      const sk = ctx.createLinearGradient(0, 0, 0, BOARD_Y + tideOffset);
+      sk.addColorStop(0, '#0d1b2a');
+      sk.addColorStop(1, '#0e2236');
+      ctx.fillStyle = sk;
+      ctx.fillRect(0, 0, CW, CH);
 
-      if (s.sunEl) {
-        const tp = (s.sunEl.getAttribute('transform')||'').replace(/\s*rotate\([^)]+\)/,'');
-        s.sunEl.setAttribute('transform', `${tp} rotate(${s.sunRot.toFixed(1)})`);
+      // Wave fill
+      ctx.beginPath();
+      ctx.moveTo(0, CH);
+      for (let x = 0; x <= CW; x += 2) ctx.lineTo(x, wy(x, ph1, ph2, ph3, waveAmp, tideOffset));
+      ctx.lineTo(CW, CH);
+      ctx.closePath();
+      const wg = ctx.createLinearGradient(0, BOARD_Y + tideOffset, 0, CH);
+      wg.addColorStop(0, `rgba(${r},${g},${b},.22)`);
+      wg.addColorStop(1, `rgba(${r},${g},${b},.07)`);
+      ctx.fillStyle = wg; ctx.fill();
+
+      // Wave line
+      ctx.beginPath();
+      for (let x = 0; x <= CW; x += 2) {
+        x === 0 ? ctx.moveTo(x, wy(x, ph1, ph2, ph3, waveAmp, tideOffset))
+                : ctx.lineTo(x, wy(x, ph1, ph2, ph3, waveAmp, tideOffset));
       }
-      if (s.boltEl) s.boltEl.setAttribute('opacity', Math.random() > 0.93 ? '1' : '0.65');
+      ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.globalAlpha = .55;
+      ctx.stroke(); ctx.globalAlpha = 1;
 
-      s.rainDrops.forEach(d => {
-        d.y += d.spd; d.x -= 0.5;
-        if (d.y > H) { d.y = -10; d.x = Math.random()*W; }
-        d.el.setAttribute('x1', d.x); d.el.setAttribute('y1', d.y);
-        d.el.setAttribute('x2', d.x+2); d.el.setAttribute('y2', d.y+9);
-      });
+      // Tide gauge
+      drawTideGauge(ctx, color, tideLevel);
 
-      raf = requestAnimationFrame(tick);
+      // Weather overlay (top-left)
+      const wind = windRef.current;
+      const { skyCover: sc, shortForecast: sf, precipProbability: pp } = skyRef.current;
+      const skyKey = skyFromData(wind, sc, sf, pp);
+      const skyLabel = SKY_LABELS[skyKey] || '';
+      ctx.save();
+      ctx.font = '600 11px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(200,223,240,0.55)';
+      if (skyLabel) ctx.fillText(skyLabel, 14, 20);
+      if (wind != null && wind > 0) ctx.fillText(`Wind ${Math.round(wind)} kt`, 14, 37);
+      ctx.restore();
+
+      // Sprite figure
+      if (_spriteLoaded) {
+        const pi = poseOf(score);
+        const [col, row] = POSE_SPRITES[pi];
+        const { canvas: sprite, w: sw, h: sh } = _colorizeSprite(col, row, color);
+        const waterY = wy(CX, ph1, ph2, ph3, waveAmp, tideOffset);
+        const scale  = DRAW_H / sh;
+        const dw     = sw * scale;
+        const SAMPLE = 6;
+        const slope  = (wy(CX+SAMPLE, ph1, ph2, ph3, waveAmp, tideOffset) - wy(CX-SAMPLE, ph1, ph2, ph3, waveAmp, tideOffset)) / (2*SAMPLE);
+        const MAX_TILT = 18 * Math.PI / 180;
+        const angle  = Math.max(-MAX_TILT, Math.min(MAX_TILT, Math.atan(slope)));
+        ctx.save();
+        ctx.translate(CX, waterY + BOARD_SINK);
+        ctx.rotate(angle);
+        ctx.drawImage(sprite, -dw/2, -DRAW_H + CROP_PAD_BOTTOM * scale, dw, DRAW_H);
+        ctx.restore();
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
     }
-    raf = requestAnimationFrame(tick);
-    return () => { cancelAnimationFrame(raf); stateRef.current = null; };
-  }, [score, windSpeedKt, skyCover]);
+
+    ensureSprite(() => {}); // kick off load; sprite check inside tick
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      alive = false;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   return (
-    <svg
-      ref={svgRef}
-      viewBox={`0 0 ${W} ${H}`}
+    <canvas
+      ref={canvasRef}
+      width={CW}
+      height={CH}
       style={{ width: '100%', height: 'auto', borderRadius: 12, display: 'block' }}
-      preserveAspectRatio="xMidYMid meet"
     />
   );
 }
