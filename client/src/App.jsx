@@ -217,6 +217,8 @@ export default function App() {
             skyCover={currentForecast?.skyCover ?? null}
             shortForecast={currentForecast?.shortForecast ?? null}
             precipProbability={currentForecast?.precipProbability ?? null}
+            tideCurrentFt={current?.tideCurrentFt ?? null}
+            nextHilos={data?.nextHilos ?? null}
           />
         )}
 

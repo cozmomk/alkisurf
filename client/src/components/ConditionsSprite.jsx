@@ -239,17 +239,29 @@ export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbabil
 
 const SKY_LABELS = { sunny: 'Sunny', partly: 'Partly cloudy', overcast: 'Overcast', rain: 'Rain', storm: 'Storm', night: 'Night' };
 
+function realTidePct(currentFt, hilos) {
+  if (currentFt == null || !hilos?.length) return null;
+  const nextH = hilos.find(h => h.type === 'H');
+  const nextL = hilos.find(h => h.type === 'L');
+  if (!nextH || !nextL) return null;
+  const range = nextH.ft - nextL.ft;
+  if (range <= 0) return null;
+  return Math.max(0, Math.min(1, (currentFt - nextL.ft) / range));
+}
+
 // ─── component ────────────────────────────────────────────────────────────────
-export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = null, shortForecast = null, precipProbability = null }) {
+export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = null, shortForecast = null, precipProbability = null, tideCurrentFt = null, nextHilos = null }) {
   const canvasRef  = useRef(null);
   const scoreRef   = useRef(score ?? 0);
   const windRef    = useRef(windSpeedKt ?? 0);
   const skyRef     = useRef({ skyCover, shortForecast, precipProbability });
+  const tideRef    = useRef({ tideCurrentFt, nextHilos });
   const rafRef     = useRef(null);
 
   useEffect(() => { scoreRef.current = score ?? 0; }, [score]);
   useEffect(() => { windRef.current = windSpeedKt ?? 0; }, [windSpeedKt]);
   useEffect(() => { skyRef.current = { skyCover, shortForecast, precipProbability }; }, [skyCover, shortForecast, precipProbability]);
+  useEffect(() => { tideRef.current = { tideCurrentFt, nextHilos }; }, [tideCurrentFt, nextHilos]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -259,7 +271,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = nu
     let ph1 = Math.random()*Math.PI*2;
     let ph2 = Math.random()*Math.PI*2;
     let ph3 = Math.random()*Math.PI*2;
-    let tidePhase = 0, tideLevel = 0.5, tideOffset = 0;
+    let tidePhase = 0;
     let alive = true;
 
     function tick() {
@@ -268,8 +280,17 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = nu
       const hs      = scoreToHs(score);
       const spd     = .01 + hs * .07;
       ph1 += spd; ph2 += spd*1.13; ph3 += spd*.79;
-      tidePhase += (2 * Math.PI) / 5400;
-      tideLevel  = 0.5 + 0.5 * Math.sin(tidePhase);
+
+      // Use real tide data if available; fall back to slow sine animation
+      const { tideCurrentFt, nextHilos } = tideRef.current;
+      const realPct = realTidePct(tideCurrentFt, nextHilos);
+      let tideLevel, tideOffset;
+      if (realPct != null) {
+        tideLevel = realPct;
+      } else {
+        tidePhase += (2 * Math.PI) / 5400;
+        tideLevel = 0.5 + 0.5 * Math.sin(tidePhase);
+      }
       tideOffset = TIDE_RANGE * (0.5 - tideLevel);
 
       const waveAmp = Math.max(hs * 45 * .5, 0.6);
