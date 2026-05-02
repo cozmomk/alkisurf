@@ -28,7 +28,7 @@ export default function InsightsPanel() {
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between"
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '10px 0', minHeight: 44 }}
       >
         <span className="text-[11px] font-semibold" style={{ color: '#5a7fa0' }}>
           Model accuracy · {headerCount}

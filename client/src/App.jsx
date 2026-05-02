@@ -46,7 +46,7 @@ function SourceBadge({ ok, label }) {
   return (
     <a href={href} target="_blank" rel="noopener noreferrer"
       className="flex items-center gap-1 text-[10px] transition-opacity hover:opacity-70"
-      style={{ color: ok ? '#00e887' : '#ff2b55', textDecoration: 'none' }}>
+      style={{ color: ok ? '#00e887' : '#ff2b55', textDecoration: 'none', minHeight: 44, paddingBlock: 6, paddingInline: 4 }}>
       <span style={{ fontSize: 8 }}>{ok ? '●' : '○'}</span>{label}
     </a>
   );
@@ -60,7 +60,7 @@ function ModelExplainer({ scores }) {
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between"
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '10px 0', minHeight: 44 }}>
         <span className="text-[11px] font-semibold" style={{ color: '#5a7fa0' }}>How is this score calculated?</span>
         <span className="text-[10px]" style={{ color: '#3a5a70' }}>{open ? '▲' : '▼'}</span>
       </button>
