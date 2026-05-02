@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { uvLabel } from '../utils.js';
 
 // ─── scene constants ──────────────────────────────────────────────────────────
 const CW = 540, CH = 270, CX = 250, BOARD_Y = 225, DRAW_H = 125;
@@ -402,18 +403,20 @@ function cloudX(ox, spd, t) {
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
-export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = null, shortForecast = null, precipProbability = null, tideCurrentFt = null, nextHilos = null }) {
-  const canvasRef  = useRef(null);
-  const scoreRef   = useRef(score ?? 0);
-  const windRef    = useRef(windSpeedKt ?? 0);
-  const skyRef     = useRef({ skyCover, shortForecast, precipProbability });
-  const tideRef    = useRef({ tideCurrentFt, nextHilos });
-  const rafRef     = useRef(null);
+export default function ConditionsSprite({ score, windSpeedKt = 0, windDirLabel = null, windGustKt = null, skyCover = null, shortForecast = null, precipProbability = null, uvIndex = null, precipInPerHr = null, waterTempF = null, tideCurrentFt = null, nextHilos = null }) {
+  const canvasRef    = useRef(null);
+  const scoreRef     = useRef(score ?? 0);
+  const windRef      = useRef(windSpeedKt ?? 0);
+  const skyRef       = useRef({ skyCover, shortForecast, precipProbability });
+  const tideRef      = useRef({ tideCurrentFt, nextHilos });
+  const overlayRef   = useRef({ windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF });
+  const rafRef       = useRef(null);
 
   useEffect(() => { scoreRef.current = score ?? 0; }, [score]);
   useEffect(() => { windRef.current = windSpeedKt ?? 0; }, [windSpeedKt]);
   useEffect(() => { skyRef.current = { skyCover, shortForecast, precipProbability }; }, [skyCover, shortForecast, precipProbability]);
   useEffect(() => { tideRef.current = { tideCurrentFt, nextHilos }; }, [tideCurrentFt, nextHilos]);
+  useEffect(() => { overlayRef.current = { windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF }; }, [windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -627,14 +630,49 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = nu
         ctx.restore();
       }
 
-      // Weather text overlay — bottom-left, drawn last
+      // Weather text overlay — bottom-left, 3 lines, drawn last
       const skyLabel = SKY_LABELS[skyKey] || '';
+      const { windDirLabel: wdl, windGustKt: gust, uvIndex: uv, precipInPerHr: pih, waterTempF: wtf } = overlayRef.current;
+
+      // Line 2: wind speed + direction (+ gust if >3 kt above sustained)
+      let windLine = null;
+      if (wind != null && wind > 0) {
+        let ws = `Wind ${Math.round(wind)} kt`;
+        if (wdl) ws += ` ${wdl}`;
+        if (gust != null && gust > wind + 3) ws += ` (g${Math.round(gust)})`;
+        windLine = ws;
+      }
+
+      // Line 3: condition-specific detail
+      let detailLine = null;
+      if (skyKey === 'sunny' || skyKey === 'partly') {
+        if (uv != null && !isNightNow()) {
+          detailLine = `UV ${Math.round(uv)} · ${uvLabel(Math.round(uv))}`;
+        } else if (wtf != null) {
+          detailLine = `Water ${Math.round(wtf)}°F`;
+        }
+      } else if (skyKey === 'overcast') {
+        if (skyCover != null) detailLine = `${Math.round(skyCover)}% cloud cover`;
+        else if (wtf != null) detailLine = `Water ${Math.round(wtf)}°F`;
+      } else if (skyKey === 'rain' || skyKey === 'storm') {
+        const pct  = skyRef.current.precipProbability;
+        const amt  = pih != null && pih > 0
+          ? (pih < 0.01 ? '< 0.01"' : `${pih.toFixed(2)}"`) + '/hr'
+          : null;
+        if (pct != null && amt) detailLine = `${Math.round(pct)}% · ${amt}`;
+        else if (pct != null)   detailLine = `${Math.round(pct)}% chance`;
+        else if (amt)           detailLine = amt;
+      }
+
       ctx.save();
       ctx.font = '600 11px system-ui';
       ctx.textAlign = 'left';
       ctx.fillStyle = 'rgba(200,223,240,0.55)';
-      if (wind != null && wind > 0) ctx.fillText(`Wind ${Math.round(wind)} kt`, 14, CH - 10);
-      if (skyLabel) ctx.fillText(skyLabel, 14, CH - 25);
+      const lineH = 15;
+      let lineY = CH - 10;
+      if (detailLine) { ctx.fillText(detailLine, 14, lineY); lineY -= lineH; }
+      if (windLine)   { ctx.fillText(windLine, 14, lineY);   lineY -= lineH; }
+      if (skyLabel)     ctx.fillText(skyLabel, 14, lineY);
       ctx.restore();
 
       rafRef.current = requestAnimationFrame(tick);

@@ -4,7 +4,7 @@ const LAT = 47.58;
 const LON = -122.42;
 
 export async function fetchUVData(fetchFn) {
-  const url = `${BASE}?latitude=${LAT}&longitude=${LON}&hourly=uv_index&timezone=UTC&forecast_days=3`;
+  const url = `${BASE}?latitude=${LAT}&longitude=${LON}&hourly=uv_index,precipitation&timezone=UTC&forecast_days=3`;
   const res = await fetchFn(url, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`Open-Meteo UV failed: ${res.status}`);
   const json = await res.json();
@@ -13,5 +13,6 @@ export async function fetchUVData(fetchFn) {
   return h.time.map((t, i) => ({
     ts: new Date(t + 'Z').getTime(),
     uvIndex: h.uv_index?.[i] ?? null,
+    precipMmHr: h.precipitation?.[i] ?? null,  // mm/hr
   }));
 }

@@ -186,7 +186,7 @@ async function buildConditions() {
 
   const allHours = [
     ...pastHoursFromLog,
-    ...nwsHours.filter(h => h.ts > now - 12 * 3600 * 1000 && h.ts < now + 49 * 3600 * 1000),
+    ...nwsHours.filter(h => h.ts > now - 12 * 3600 * 1000 && h.ts < now + 73 * 3600 * 1000),
   ].sort((a, b) => a.ts - b.ts);
 
   const forecastHours = allHours.map(h => {
@@ -247,6 +247,8 @@ async function buildConditions() {
         shortForecast: h.shortForecast,
         precipProbability: h.precipProbability ?? null,
         uvIndex: nearestUV?.uvIndex ?? null,
+        precipInPerHr: nearestUV?.precipMmHr != null ? nearestUV.precipMmHr / 25.4 : null,
+        windGustKt: h.windGustKt ?? null,
         waveHeightFt: nearestMarine?.waveHeightM != null ? nearestMarine.waveHeightM * 3.281 : null,
         sides,
         actual,

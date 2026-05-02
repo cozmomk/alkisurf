@@ -100,11 +100,17 @@ function Cell({ hour }) {
         {cloud != null && (
           <span className="text-[8px]" style={{ color: '#3a5a70' }}>☁ {cloud}%</span>
         )}
-        {precip != null && precip > 5 && (
-          <span className="text-[8px]" style={{ color: precip > 50 ? '#7ab8e8' : '#4a6a88' }}>
-            🌧 {precip}%
-          </span>
-        )}
+        {precip != null && precip > 5 && (() => {
+          const pih = hour.precipInPerHr;
+          const amtStr = pih != null && pih > 0
+            ? ' · ' + (pih < 0.01 ? '<.01"' : `${pih.toFixed(2)}"`)
+            : '';
+          return (
+            <span className="text-[8px]" style={{ color: precip > 50 ? '#7ab8e8' : '#4a6a88' }}>
+              🌧 {precip}%{amtStr}
+            </span>
+          );
+        })()}
       </div>
     </div>
   );

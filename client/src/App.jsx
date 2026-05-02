@@ -214,9 +214,14 @@ export default function App() {
           <ConditionsSprite
             score={Math.max(scores.north.score, scores.south.score)}
             windSpeedKt={current?.windSpeedKt}
+            windDirLabel={current?.windDirLabel ?? null}
+            windGustKt={current?.windGustKt ?? currentForecast?.windGustKt ?? null}
             skyCover={currentForecast?.skyCover ?? null}
             shortForecast={currentForecast?.shortForecast ?? null}
             precipProbability={currentForecast?.precipProbability ?? null}
+            uvIndex={currentForecast?.uvIndex ?? null}
+            precipInPerHr={currentForecast?.precipInPerHr ?? null}
+            waterTempF={current?.waterTempF ?? null}
             tideCurrentFt={current?.tideCurrentFt ?? null}
             nextHilos={data?.nextHilos ?? null}
           />
