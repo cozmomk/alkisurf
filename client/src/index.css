@@ -13,6 +13,14 @@
 
 * { box-sizing: border-box; }
 
+/* Focus rings — never remove without replacement */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid rgba(0, 232, 135, 0.7);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 body {
   margin: 0;
   background: var(--bg);
