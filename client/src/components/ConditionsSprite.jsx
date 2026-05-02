@@ -323,14 +323,14 @@ function drawMoon(ctx, x, y, r, phase, t) {
   ctx.restore();
 }
 
-function drawRainLines(ctx, drops, t, speed = 1, heavy = false) {
+function drawRainLines(ctx, drops, t, speed = 1, heavy = false, leanX = -1, speedMult = 1) {
   for (const d of drops) {
-    const y = ((d.y + t * d.speed * speed) % BOARD_Y + BOARD_Y) % BOARD_Y;
+    const y = ((d.y + t * d.speed * speed * speedMult) % BOARD_Y + BOARD_Y) % BOARD_Y;
     const x = d.x + Math.sin(t * .45) * 5;
     const a = heavy ? .3 + .2 * Math.sin(d.phase + t) : .45;
     ctx.strokeStyle = `rgba(150,195,235,${a})`;
     ctx.lineWidth = heavy && d.heavy ? 1.4 : .85;
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 4, y + d.len); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + leanX, y + d.len); ctx.stroke();
   }
 }
 
@@ -445,28 +445,28 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
     }));
 
     const partlyClouds = [
-      { ox: 0,   oy: 0,  spd: 7,  sc: 1.2, a: .90 },
-      { ox: 170, oy: 20, spd: 4,  sc: .85, a: .70 },
-      { ox: 350, oy: 5,  spd: 10, sc: .95, a: .80 },
-      { ox: -70, oy: 32, spd: 6,  sc: .65, a: .55 },
+      { x: 0,   oy: 0,  baseSpd: 7,  sc: 1.2, a: .90 },
+      { x: 170, oy: 20, baseSpd: 4,  sc: .85, a: .70 },
+      { x: 350, oy: 5,  baseSpd: 10, sc: .95, a: .80 },
+      { x: -70, oy: 32, baseSpd: 6,  sc: .65, a: .55 },
     ];
 
     const overcastHi = Array.from({ length: 9 }, (_, i) => ({
-      ox: i * (CW / 9) - 30 + Math.random() * 40, oy: Math.random() * 20,
-      spd: 2 + Math.random() * 3, sc: .8 + Math.random() * .5, a: .55 + Math.random() * .25,
+      x: i * (CW / 9) - 30 + Math.random() * 40, oy: Math.random() * 20,
+      baseSpd: 2 + Math.random() * 3, sc: .8 + Math.random() * .5, a: .55 + Math.random() * .25,
     }));
     const overcastLo = Array.from({ length: 5 }, (_, i) => ({
-      ox: i * (CW / 5) - 20 + Math.random() * 40, oy: 38 + Math.random() * 20,
-      spd: 1 + Math.random() * 2, sc: 1 + Math.random() * .4, a: .35 + Math.random() * .15,
+      x: i * (CW / 5) - 20 + Math.random() * 40, oy: 38 + Math.random() * 20,
+      baseSpd: 1 + Math.random() * 2, sc: 1 + Math.random() * .4, a: .35 + Math.random() * .15,
     }));
 
     const rainClouds = [
-      { ox: 0,   oy: -5, spd: 3,   sc: 1.1, a: .70 },
-      { ox: 120, oy: 8,  spd: 5,   sc: .90, a: .65 },
-      { ox: 260, oy: -2, spd: 4,   sc: 1.2, a: .70 },
-      { ox: 380, oy: 10, spd: 3.5, sc: 1.0, a: .60 },
-      { ox: -60, oy: 5,  spd: 4.5, sc: .85, a: .65 },
-      { ox: 480, oy: -3, spd: 3.8, sc: 1.05, a: .63 },
+      { x: 0,   oy: -5, baseSpd: 3,   sc: 1.1, a: .70 },
+      { x: 120, oy: 8,  baseSpd: 5,   sc: .90, a: .65 },
+      { x: 260, oy: -2, baseSpd: 4,   sc: 1.2, a: .70 },
+      { x: 380, oy: 10, baseSpd: 3.5, sc: 1.0, a: .60 },
+      { x: -60, oy: 5,  baseSpd: 4.5, sc: .85, a: .65 },
+      { x: 480, oy: -3, baseSpd: 3.8, sc: 1.05, a: .63 },
     ];
     const rainDrops = Array.from({ length: 110 }, () => ({
       x: Math.random() * CW, y: Math.random() * BOARD_Y,
@@ -475,13 +475,13 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
     }));
 
     const stormClouds = [
-      { ox: 0,   oy: 0,  spd: 5,   sc: 1.2, a: .80 },
-      { ox: 110, oy: 5,  spd: 7,   sc: 1.0, a: .75 },
-      { ox: 240, oy: -3, spd: 6,   sc: 1.3, a: .80 },
-      { ox: 370, oy: 8,  spd: 5.5, sc: 1.1, a: .75 },
-      { ox: -50, oy: 3,  spd: 6,   sc: .90, a: .70 },
-      { ox: 490, oy: 1,  spd: 5.8, sc: 1.0, a: .72 },
-      { ox: 600, oy: 6,  spd: 6.5, sc: 1.15, a: .76 },
+      { x: 0,   oy: 0,  baseSpd: 5,   sc: 1.2, a: .80 },
+      { x: 110, oy: 5,  baseSpd: 7,   sc: 1.0, a: .75 },
+      { x: 240, oy: -3, baseSpd: 6,   sc: 1.3, a: .80 },
+      { x: 370, oy: 8,  baseSpd: 5.5, sc: 1.1, a: .75 },
+      { x: -50, oy: 3,  baseSpd: 6,   sc: .90, a: .70 },
+      { x: 490, oy: 1,  baseSpd: 5.8, sc: 1.0, a: .72 },
+      { x: 600, oy: 6,  baseSpd: 6.5, sc: 1.15, a: .76 },
     ];
     const stormDrops = Array.from({ length: 190 }, () => ({
       x: Math.random() * CW, y: Math.random() * BOARD_Y,
@@ -535,6 +535,29 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
       const { skyCover: sc, shortForecast: sf, precipProbability: pp } = skyRef.current;
       const skyKey = skyFromData(wind, sc, sf, pp);
 
+      // Shared wind variables — used by clouds, rain, and streaks
+      const windKt     = windRef.current;
+      const dirX       = -Math.sin(windDirRef.current * Math.PI / 180);
+      const windFactor = Math.min(1, Math.max(0, (windKt - 3) / 11)); // 0 at ≤3 kt, 1 at ≥14 kt
+      // Rain lean: base -1 (slight left), scales with wind direction and speed (±16 px)
+      const leanX         = dirX * windFactor * 16 - 1;
+      const rainSpeedMult = 0.7 + windFactor * 0.6; // 0.7× calm → 1.3× full wind
+
+      // Move all cloud banks with wind (dt-based so frame-rate independent)
+      if (dt > 0) {
+        const moveCloud = (c) => {
+          c.x += dirX * c.baseSpd * (0.3 + windFactor * 2.2) * dt;
+          // Wrap: clouds that exit one edge re-enter from the other
+          if (dirX >= 0 && c.x > CW + 100) c.x -= CW + 200;
+          else if (dirX <= 0 && c.x < -100)  c.x += CW + 200;
+        };
+        partlyClouds.forEach(moveCloud);
+        overcastHi.forEach(moveCloud);
+        overcastLo.forEach(moveCloud);
+        rainClouds.forEach(moveCloud);
+        stormClouds.forEach(moveCloud);
+      }
+
       // Sky background gradient
       const skyTop = SKY_TOPS[skyKey] || '#0d1b2a';
       const skyBot = SKY_BOTS[skyKey] || '#0e2236';
@@ -555,10 +578,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
 
       } else if (skyKey === 'partly') {
         const sunX = 68, sunY = 46;
-        const covered = partlyClouds.some(c => {
-          const cx = cloudX(c.ox, c.spd, t);
-          return Math.hypot(cx - sunX, c.oy + 30 - sunY) < 55;
-        });
+        const covered = partlyClouds.some(c => Math.hypot(c.x - sunX, c.oy + 30 - sunY) < 55);
         if (!covered) {
           drawSun(ctx, sunX, sunY, 19, t);
         } else {
@@ -568,13 +588,11 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
           ctx.fillStyle = eg;
           ctx.beginPath(); ctx.arc(sunX, sunY, 52, 0, Math.PI * 2); ctx.fill();
         }
-        for (const c of partlyClouds) {
-          drawCloud(ctx, cloudX(c.ox, c.spd, t), c.oy + 28, c.sc, c.a);
-        }
+        for (const c of partlyClouds) drawCloud(ctx, c.x, c.oy + 28, c.sc, c.a);
 
       } else if (skyKey === 'overcast') {
-        for (const c of overcastHi) drawCloud(ctx, cloudX(c.ox, c.spd, t), c.oy + 8,  c.sc, c.a);
-        for (const c of overcastLo) drawCloud(ctx, cloudX(c.ox, c.spd, t), c.oy + 18, c.sc, c.a * .75);
+        for (const c of overcastHi) drawCloud(ctx, c.x, c.oy + 8,  c.sc, c.a);
+        for (const c of overcastLo) drawCloud(ctx, c.x, c.oy + 18, c.sc, c.a * .75);
         const ceil = ctx.createLinearGradient(0, 0, 0, 75);
         ceil.addColorStop(0, 'rgba(160,180,200,.16)');
         ceil.addColorStop(1, 'rgba(140,160,185,0)');
@@ -582,8 +600,8 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
         ctx.fillRect(0, 0, CW, 75);
 
       } else if (skyKey === 'rain') {
-        for (const c of rainClouds) drawCloud(ctx, cloudX(c.ox, c.spd, t), c.oy + 8, c.sc, c.a);
-        drawRainLines(ctx, rainDrops, t);
+        for (const c of rainClouds) drawCloud(ctx, c.x, c.oy + 8, c.sc, c.a);
+        drawRainLines(ctx, rainDrops, t, 1, false, leanX, rainSpeedMult);
         const mist = ctx.createLinearGradient(0, BOARD_Y - 28, 0, BOARD_Y + tideOffset);
         mist.addColorStop(0, 'rgba(100,145,185,0)');
         mist.addColorStop(1, 'rgba(90,130,170,.1)');
@@ -591,8 +609,8 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
         ctx.fillRect(0, BOARD_Y - 28, CW, 28 + Math.max(0, tideOffset));
 
       } else if (skyKey === 'storm') {
-        for (const c of stormClouds) drawCloud(ctx, cloudX(c.ox, c.spd, t), c.oy + 4, c.sc, c.a);
-        drawRainLines(ctx, stormDrops, t, 1.5, true);
+        for (const c of stormClouds) drawCloud(ctx, c.x, c.oy + 4, c.sc, c.a);
+        drawRainLines(ctx, stormDrops, t, 1.5, true, leanX, rainSpeedMult);
         if (!bolt.active && t > nextBoltT) {
           Object.assign(bolt, makeBolt());
           bolt.active = true; bolt.startT = t;
@@ -605,30 +623,22 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
         drawMoon(ctx, CW - 68, 52, 28, phase, t);
       }
 
-      // Wind streaks — scale 0 at ≤3 kt, full at ≥14 kt
-      {
-        const windKt = windRef.current;
-        const streakFactor = Math.min(1, Math.max(0, (windKt - 3) / 11));
-        if (streakFactor > 0 && dt > 0) {
-          // dirX: wind FROM N=0°→no horiz, FROM E=90°→moves west (left), FROM W=270°→moves east (right)
-          const dirX = -Math.sin(windDirRef.current * Math.PI / 180);
-          ctx.save();
-          ctx.lineWidth = 0.8;
-          for (const s of windStreaks) {
-            s.x += dirX * s.speed * streakFactor * dt;
-            // Wrap around edges
-            const len = s.baseLen * streakFactor;
-            if (dirX >= 0 && s.x - len > CW)  s.x = -len;
-            if (dirX <= 0 && s.x + len < 0)    s.x = CW + len;
-            const a = s.alpha * streakFactor;
-            ctx.strokeStyle = `rgba(200,218,235,${a})`;
-            ctx.beginPath();
-            ctx.moveTo(s.x, s.y);
-            ctx.lineTo(s.x + dirX * len, s.y);
-            ctx.stroke();
-          }
-          ctx.restore();
+      // Wind streaks — scale 0 at ≤3 kt, full at ≥14 kt (uses shared windFactor/dirX)
+      if (windFactor > 0 && dt > 0) {
+        ctx.save();
+        ctx.lineWidth = 0.8;
+        for (const s of windStreaks) {
+          s.x += dirX * s.speed * windFactor * dt;
+          const len = s.baseLen * windFactor;
+          if (dirX >= 0 && s.x - len > CW) s.x = -len;
+          if (dirX <= 0 && s.x + len < 0)  s.x = CW + len;
+          ctx.strokeStyle = `rgba(200,218,235,${s.alpha * windFactor})`;
+          ctx.beginPath();
+          ctx.moveTo(s.x, s.y);
+          ctx.lineTo(s.x + dirX * len, s.y);
+          ctx.stroke();
         }
+        ctx.restore();
       }
 
       // Wave fill
@@ -651,9 +661,8 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
       ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.globalAlpha = .55;
       ctx.stroke(); ctx.globalAlpha = 1;
 
-      // Whitecaps — appear on wave crests at ≥7 kt, dense at ≥15 kt
+      // Whitecaps — appear on wave crests at ≥7 kt, dense at ≥15 kt (uses shared windKt)
       {
-        const windKt = windRef.current;
         const wcFactor = Math.min(1, Math.max(0, (windKt - 7) / 8));
         if (wcFactor > 0) {
           ctx.save();
