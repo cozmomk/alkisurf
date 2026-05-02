@@ -406,10 +406,11 @@ function cloudX(ox, spd, t) {
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
-export default function ConditionsSprite({ score, windSpeedKt = 0, windDirLabel = null, windGustKt = null, skyCover = null, shortForecast = null, precipProbability = null, uvIndex = null, precipInPerHr = null, waterTempF = null, tideCurrentFt = null, nextHilos = null }) {
+export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 0, windDirLabel = null, windGustKt = null, skyCover = null, shortForecast = null, precipProbability = null, uvIndex = null, precipInPerHr = null, waterTempF = null, tideCurrentFt = null, nextHilos = null }) {
   const canvasRef    = useRef(null);
   const scoreRef     = useRef(score ?? 0);
   const windRef      = useRef(windSpeedKt ?? 0);
+  const windDirRef   = useRef(windDirDeg ?? 0);
   const skyRef       = useRef({ skyCover, shortForecast, precipProbability });
   const tideRef      = useRef({ tideCurrentFt, nextHilos });
   const overlayRef   = useRef({ windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF });
@@ -417,6 +418,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirLabel 
 
   useEffect(() => { scoreRef.current = score ?? 0; }, [score]);
   useEffect(() => { windRef.current = windSpeedKt ?? 0; }, [windSpeedKt]);
+  useEffect(() => { windDirRef.current = windDirDeg ?? 0; }, [windDirDeg]);
   useEffect(() => { skyRef.current = { skyCover, shortForecast, precipProbability }; }, [skyCover, shortForecast, precipProbability]);
   useEffect(() => { tideRef.current = { tideCurrentFt, nextHilos }; }, [tideCurrentFt, nextHilos]);
   useEffect(() => { overlayRef.current = { windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF }; }, [windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF]);
@@ -489,12 +491,24 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirLabel 
     const bolt = makeBolt();
     let nextBoltT = 1.8 + Math.random() * 2;
 
+    // Wind streaks — 42 particles scattered across the sky
+    const windStreaks = Array.from({ length: 42 }, () => ({
+      x:       Math.random() * CW,
+      y:       8 + Math.random() * (BOARD_Y - 26),
+      baseLen: 14 + Math.random() * 34,
+      speed:   55 + Math.random() * 110,
+      alpha:   0.10 + Math.random() * 0.18,
+    }));
+
     let startTime = null;
+    let lastTime  = null;
 
     function tick(now) {
       if (!alive) return;
       if (!startTime) startTime = now;
-      const t = (now - startTime) / 1000;
+      const t  = (now - startTime) / 1000;
+      const dt = lastTime ? Math.min((now - lastTime) / 1000, 0.05) : 0;
+      lastTime = now;
 
       const score   = scoreRef.current;
       const hs      = scoreToHs(score);
@@ -591,6 +605,32 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirLabel 
         drawMoon(ctx, CW - 68, 52, 28, phase, t);
       }
 
+      // Wind streaks — scale 0 at ≤3 kt, full at ≥14 kt
+      {
+        const windKt = windRef.current;
+        const streakFactor = Math.min(1, Math.max(0, (windKt - 3) / 11));
+        if (streakFactor > 0 && dt > 0) {
+          // dirX: wind FROM N=0°→no horiz, FROM E=90°→moves west (left), FROM W=270°→moves east (right)
+          const dirX = -Math.sin(windDirRef.current * Math.PI / 180);
+          ctx.save();
+          ctx.lineWidth = 0.8;
+          for (const s of windStreaks) {
+            s.x += dirX * s.speed * streakFactor * dt;
+            // Wrap around edges
+            const len = s.baseLen * streakFactor;
+            if (dirX >= 0 && s.x - len > CW)  s.x = -len;
+            if (dirX <= 0 && s.x + len < 0)    s.x = CW + len;
+            const a = s.alpha * streakFactor;
+            ctx.strokeStyle = `rgba(200,218,235,${a})`;
+            ctx.beginPath();
+            ctx.moveTo(s.x, s.y);
+            ctx.lineTo(s.x + dirX * len, s.y);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
+
       // Wave fill
       ctx.beginPath();
       ctx.moveTo(0, CH);
@@ -610,6 +650,41 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirLabel 
       }
       ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.globalAlpha = .55;
       ctx.stroke(); ctx.globalAlpha = 1;
+
+      // Whitecaps — appear on wave crests at ≥7 kt, dense at ≥15 kt
+      {
+        const windKt = windRef.current;
+        const wcFactor = Math.min(1, Math.max(0, (windKt - 7) / 8));
+        if (wcFactor > 0) {
+          ctx.save();
+          const STEP = 18;
+          for (let wx = STEP; wx < CW - STEP; wx += STEP) {
+            const yC = wy(wx,        ph1, ph2, ph3, waveAmp, tideOffset);
+            const yL = wy(wx - STEP, ph1, ph2, ph3, waveAmp, tideOffset);
+            const yR = wy(wx + STEP, ph1, ph2, ph3, waveAmp, tideOffset);
+            // Local minimum in screen Y = wave crest
+            if (yC < yL && yC < yR) {
+              // Pseudo-random per-crest visibility that animates slowly
+              const rand = (Math.sin(wx * 5.7 + t * 0.9) * 0.5 + 0.5) *
+                           (Math.sin(wx * 2.1 + t * 0.35) * 0.5 + 0.5);
+              if (rand < wcFactor * 0.68) {
+                const a = wcFactor * (0.22 + rand * 0.38);
+                // Primary foam ellipse
+                ctx.fillStyle = `rgba(255,255,255,${a})`;
+                ctx.beginPath();
+                ctx.ellipse(wx, yC - 1, 5 + rand * 10, 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Secondary wisp for texture
+                ctx.fillStyle = `rgba(255,255,255,${a * 0.45})`;
+                ctx.beginPath();
+                ctx.ellipse(wx + (rand - 0.5) * 10, yC + 1.5, 3 + rand * 6, 1.3, 0, 0, Math.PI * 2);
+                ctx.fill();
+              }
+            }
+          }
+          ctx.restore();
+        }
+      }
 
       // Tide gauge
       drawTideGauge(ctx, color, tideLevel);

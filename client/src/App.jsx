@@ -220,6 +220,7 @@ export default function App() {
           <ConditionsSprite
             score={Math.max(scores.north.score, scores.south.score)}
             windSpeedKt={current?.windSpeedKt}
+            windDirDeg={windDirDeg}
             windDirLabel={current?.windDirLabel ?? null}
             windGustKt={current?.windGustKt ?? currentForecast?.windGustKt ?? null}
             skyCover={currentForecast?.skyCover ?? null}
