@@ -8,8 +8,11 @@ const CROP_PAD_TOP = 28, CROP_PAD_LEFT = 12, CROP_PAD_RIGHT = 2, CROP_PAD_BOTTOM
 const BOARD_SINK = 14;
 const GRID_COLS = 5;
 
-// score → [col, row] in paddler-sprites.png
-const POSE_SPRITES = [[0,0],[1,0],[2,0],[3,0],[4,0]];
+// score → column in paddler-sprites.png (row 0 = normal, row 1 = alternate)
+const POSE_COLS = [0, 1, 2, 3, 4];
+// Alternate pose timing: every ALT_PERIOD seconds, show row-1 for ALT_DURATION seconds
+const ALT_PERIOD   = 45;  // total cycle length (seconds)
+const ALT_DURATION = 5;   // how long the alternate pose is shown each cycle
 const COLORS = ['#ff2b55','#ff2b55','#ff6b1a','#ff6b1a','#ffc300','#ffc300','#7dff4f','#7dff4f','#00e887','#00e887','#00e887'];
 
 function poseOf(s)     { return s>=9?4:s>=7?3:s>=5?2:s>=3?1:0; }
@@ -613,8 +616,11 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirLabel 
 
       // Sprite figure
       if (_spriteLoaded) {
-        const pi = poseOf(score);
-        const [col, row] = POSE_SPRITES[pi];
+        const pi  = poseOf(score);
+        const col = POSE_COLS[pi];
+        // Periodically show row-1 alternate poses (every ALT_PERIOD s, for ALT_DURATION s)
+        const cyclePos = t % ALT_PERIOD;
+        const row = cyclePos > (ALT_PERIOD - ALT_DURATION) ? 1 : 0;
         const { canvas: sprite, w: sw, h: sh } = _colorizeSprite(col, row, color);
         const waterY = wy(CX, ph1, ph2, ph3, waveAmp, tideOffset);
         const scale  = DRAW_H / sh;
