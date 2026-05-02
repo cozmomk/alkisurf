@@ -30,8 +30,8 @@ export default function WebcamPanel() {
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-opacity"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', textDecoration: 'none' }}
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all hover:bg-white/[0.07] active:scale-[0.99]"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', textDecoration: 'none', minHeight: 52 }}
           >
             <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
             <div className="min-w-0 flex-1">

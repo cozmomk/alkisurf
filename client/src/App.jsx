@@ -158,7 +158,7 @@ export default function App() {
               <span className="text-[10px] font-semibold" style={{ color: '#00e887' }}>LIVE</span>
             </div>
             {data?.updatedAt && (
-              <span className="text-[10px]" style={{ color: '#5a7fa0' }}>
+              <span className="text-[11px]" style={{ color: '#7a9ab8' }}>
                 Updated {timeAgo(data.updatedAt)}
               </span>
             )}
