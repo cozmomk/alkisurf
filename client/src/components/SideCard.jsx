@@ -12,23 +12,16 @@ const SCORE_GLOW = {
 function ScoreRing({ score, color }) {
   const r = 38;
   const circ = 2 * Math.PI * r;
-  const full = Math.round(score) >= 10;
   const dash = (score / 10) * circ;
   return (
     <svg width="96" height="96" viewBox="0 0 96 96">
       <circle cx="48" cy="48" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="7"/>
-      {full ? (
-        <circle cx="48" cy="48" r={r} fill="none" stroke={color} strokeWidth="7"
-          style={{ transition: 'stroke 0.5s' }}
-        />
-      ) : (
-        <circle cx="48" cy="48" r={r} fill="none" stroke={color} strokeWidth="7"
-          strokeLinecap="round"
-          strokeDasharray={`${dash} ${circ}`}
-          strokeDashoffset={circ * 0.25}
-          style={{ transition: 'stroke-dasharray 0.8s ease, stroke 0.5s' }}
-        />
-      )}
+      <circle cx="48" cy="48" r={r} fill="none" stroke={color} strokeWidth="7"
+        strokeLinecap="round"
+        strokeDasharray={`${dash} ${circ}`}
+        transform="rotate(-90 48 48)"
+        style={{ transition: 'stroke-dasharray 0.8s ease, stroke 0.5s' }}
+      />
     </svg>
   );
 }
