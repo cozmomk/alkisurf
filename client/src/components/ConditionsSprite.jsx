@@ -627,14 +627,14 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, skyCover = nu
         ctx.restore();
       }
 
-      // Weather text overlay (drawn last so it's always on top)
+      // Weather text overlay — bottom-left, drawn last
       const skyLabel = SKY_LABELS[skyKey] || '';
       ctx.save();
       ctx.font = '600 11px system-ui';
       ctx.textAlign = 'left';
       ctx.fillStyle = 'rgba(200,223,240,0.55)';
-      if (skyLabel) ctx.fillText(skyLabel, 14, 20);
-      if (wind != null && wind > 0) ctx.fillText(`Wind ${Math.round(wind)} kt`, 14, 37);
+      if (wind != null && wind > 0) ctx.fillText(`Wind ${Math.round(wind)} kt`, 14, CH - 10);
+      if (skyLabel) ctx.fillText(skyLabel, 14, CH - 25);
       ctx.restore();
 
       rafRef.current = requestAnimationFrame(tick);
