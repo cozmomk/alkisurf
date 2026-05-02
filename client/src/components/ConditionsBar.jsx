@@ -3,7 +3,7 @@ import { compassLabel, uvColor, uvLabel } from '../utils.js';
 function Pill({ label, value, icon }) {
   return (
     <div className="flex flex-col items-center gap-0.5 px-3">
-      <span className="text-[10px] font-medium tracking-widest uppercase" style={{ color: '#5a7fa0' }}>
+      <span className="text-[11px] font-medium tracking-widest uppercase" style={{ color: '#5a7fa0' }}>
         {icon && <span className="mr-1">{icon}</span>}{label}
       </span>
       <span className="text-sm font-semibold" style={{ color: '#e2eef7' }}>{value ?? '—'}</span>
@@ -76,7 +76,7 @@ export default function ConditionsBar({ current, nextHilos, uvIndex, precipInPer
         {uv != null && (
           <>
             <div className="flex flex-col items-center gap-0.5 px-3">
-              <span className="text-[10px] font-medium tracking-widest uppercase" style={{ color: '#5a7fa0' }}>UV</span>
+              <span className="text-[11px] font-medium tracking-widest uppercase" style={{ color: '#5a7fa0' }}>UV</span>
               <span className="text-sm font-semibold" style={{ color: uvColor(uv) }}>{uv} · {uvLabel(uv)}</span>
             </div>
             {sep}
@@ -85,7 +85,7 @@ export default function ConditionsBar({ current, nextHilos, uvIndex, precipInPer
         {precipStr && (
           <>
             <div className="flex flex-col items-center gap-0.5 px-3">
-              <span className="text-[10px] font-medium tracking-widest uppercase" style={{ color: '#5a7fa0' }}>Rain</span>
+              <span className="text-[11px] font-medium tracking-widest uppercase" style={{ color: '#5a7fa0' }}>Rain</span>
               <span className="text-sm font-semibold" style={{ color: '#7ab8e8' }}>{precipStr}</span>
             </div>
             {sep}
@@ -97,7 +97,7 @@ export default function ConditionsBar({ current, nextHilos, uvIndex, precipInPer
         />
         {sep}
         <div className="flex flex-col items-center gap-0.5 px-3">
-          <span className="text-[10px] font-medium tracking-widest uppercase" style={{ color: '#5a7fa0' }}>Tide</span>
+          <span className="text-[11px] font-medium tracking-widest uppercase" style={{ color: '#5a7fa0' }}>Tide</span>
           <span className="text-sm font-semibold" style={{ color: '#e2eef7' }}>
             {tideStr} <TideArrow direction={current.tideDirection} />
           </span>
