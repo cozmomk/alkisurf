@@ -262,9 +262,7 @@ export default function App() {
         {data?.forecast?.length > 0 && (
           <div className="card p-4">
             <div className="mb-3">
-              <span className="text-xs font-bold tracking-widest uppercase" style={{ color: '#5a7fa0' }}>
-                48-Hour Forecast
-              </span>
+              <span className="section-title">48-Hour Forecast</span>
             </div>
             <ForecastStrip forecast={data.forecast} />
           </div>

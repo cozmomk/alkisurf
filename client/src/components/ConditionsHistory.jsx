@@ -72,9 +72,7 @@ export default function ConditionsHistory() {
   return (
     <div className="card p-4">
       <div className="mb-3">
-        <span className="text-xs font-bold tracking-widest uppercase" style={{ color: '#5a7fa0' }}>
-          Glass History
-        </span>
+        <span className="section-title">Glass History</span>
       </div>
 
       {status === 'loading' && (

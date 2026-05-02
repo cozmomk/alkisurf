@@ -22,9 +22,7 @@ const CAMS = [
 export default function WebcamPanel() {
   return (
     <div className="card p-4 flex flex-col gap-3">
-      <span className="text-xs font-bold tracking-widest uppercase" style={{ color: '#5a7fa0' }}>
-        Visual Check
-      </span>
+      <span className="section-title">Visual Check</span>
       <div className="flex flex-col gap-2">
         {CAMS.map(({ label, desc, href, icon }) => (
           <a

@@ -63,6 +63,17 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
 
+/* Section-level headings — distinguishes page sections from in-card labels */
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8ab8d8;
+  padding-left: 8px;
+  border-left: 2px solid rgba(0, 232, 135, 0.35);
+}
+
 /* Forecast strip */
 .forecast-strip {
   display: flex;

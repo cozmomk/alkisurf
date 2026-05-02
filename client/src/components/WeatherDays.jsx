@@ -217,9 +217,7 @@ export default function WeatherDays({ forecast, bestWindows }) {
 
   return (
     <div className="card p-4 flex flex-col gap-3">
-      <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: '#5a7fa0' }}>
-        3-Day Outlook
-      </span>
+      <span className="section-title">3-Day Outlook</span>
       <div className="flex gap-2">
         {summaries.map((s) => (
           <DayCard key={s.dayKey} summary={s} isFirst={s.dayKey === todayKey} isSecond={s.dayKey === tomorrowKey} />
