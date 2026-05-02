@@ -76,11 +76,16 @@ function Cell({ hour }) {
       </div>
 
       {/* Wind */}
-      {windSpeed != null && (
-        <span className="text-[9px] whitespace-nowrap" style={{ color: '#4a6a88' }}>
-          {Math.round(windSpeed)}kt {windDir}
-        </span>
-      )}
+      {windSpeed != null && (() => {
+        const gust = hour.windGustKt;
+        const showGust = gust != null && gust > windSpeed + 2;
+        return (
+          <span className="text-[9px] whitespace-nowrap" style={{ color: '#4a6a88' }}>
+            {Math.round(windSpeed)}kt {windDir}
+            {showGust && <span style={{ color: '#ff8a65' }}> G{Math.round(gust)}</span>}
+          </span>
+        );
+      })()}
 
       {/* Temp */}
       {temp != null && (

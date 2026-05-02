@@ -29,8 +29,10 @@ function groupByDay(forecast) {
 function summarizeDay(dayKey, hours, bestWindows) {
   const temps = hours.map(h => h.airTempF).filter(v => v != null);
   const winds = hours.map(h => h.windSpeedKt).filter(v => v != null);
+  const gusts = hours.map(h => h.windGustKt).filter(v => v != null);
   const uvs = hours.map(h => h.uvIndex).filter(v => v != null);
   const precips = hours.map(h => h.precipProbability).filter(v => v != null);
+  const precipAmts = hours.map(h => h.precipInPerHr).filter(v => v != null && v > 0);
 
   // Take midday hour for representative sky/wind direction
   const dayHours = hours.filter(h => { const hr = ptHour(h.time); return hr >= 6 && hr <= 20; });
@@ -54,9 +56,11 @@ function summarizeDay(dayKey, hours, bestWindows) {
     lowF: temps.length ? Math.round(Math.min(...temps)) : null,
     windMin: winds.length ? Math.round(Math.min(...winds)) : null,
     windMax: winds.length ? Math.round(Math.max(...winds)) : null,
+    gustPeak: gusts.length ? Math.round(Math.max(...gusts)) : null,
     windDir: compassLabel(noonHour?.windDirDeg),
     uvPeak: uvs.length ? Math.round(Math.max(...uvs)) : null,
     precipMax: precips.length ? Math.round(Math.max(...precips)) : null,
+    precipAmtMax: precipAmts.length ? Math.max(...precipAmts) : null,
     skyCover: noonHour?.skyCover ?? null,
     ts: noonHour?.time ?? hours[0]?.time,
     bestWin,
@@ -70,7 +74,7 @@ function fmt(ts, opts) {
 }
 
 function DayCard({ summary, isFirst, isSecond }) {
-  const { highF, lowF, windMin, windMax, windDir, uvPeak, precipMax, skyCover, ts, bestWin, northWin, southWin } = summary;
+  const { highF, lowF, windMin, windMax, gustPeak, windDir, uvPeak, precipMax, precipAmtMax, skyCover, ts, bestWin, northWin, southWin } = summary;
   const sky = skyEmoji(skyCover, ts);
   const hasWindow = bestWin != null;
   const label = isFirst ? 'Today' : isSecond ? 'Tomorrow' : fmt(ts, { weekday: 'short' });
@@ -103,6 +107,9 @@ function DayCard({ summary, isFirst, isSecond }) {
           <span className="text-[8px]" style={{ color: '#3a5a70' }}>Wind</span>
           <span className="text-[10px] font-semibold" style={{ color: '#c8dff0' }}>
             {windMin === windMax ? `${windMax}kt` : `${windMin}–${windMax}kt`} {windDir}
+            {gustPeak != null && gustPeak > windMax + 3 && (
+              <span className="ml-1 text-[9px]" style={{ color: '#ff8a65' }}>G{gustPeak}</span>
+            )}
           </span>
         </div>
       )}
@@ -123,6 +130,11 @@ function DayCard({ summary, isFirst, isSecond }) {
           <span className="text-[8px]" style={{ color: '#3a5a70' }}>Rain</span>
           <span className="text-[9px] font-semibold" style={{ color: precipMax > 50 ? '#7ab8e8' : '#4a6a88' }}>
             {precipMax}%
+            {precipAmtMax != null && precipAmtMax > 0 && (
+              <span className="ml-1 text-[8px]" style={{ color: '#5a8aaa' }}>
+                · {precipAmtMax < 0.01 ? '<.01"' : `${precipAmtMax.toFixed(2)}"`}/hr
+              </span>
+            )}
           </span>
         </div>
       )}

@@ -68,7 +68,7 @@ const WAVE_STATE = {
 };
 
 
-export default function SideCard({ side, data, windDirDeg, forecast, airTempF }) {
+export default function SideCard({ side, data, windDirDeg, forecast, airTempF, windGustKt, waterTempF }) {
   if (!data) return null;
   const { score, label, Hs, windEff, fetch: fetchM, waveState, windDurHrs } = data;
   const color = scoreColor(score);
@@ -137,6 +137,14 @@ export default function SideCard({ side, data, windDirDeg, forecast, airTempF })
         <SwellBar Hs={Hs} />
       </div>
 
+      {/* Water temp */}
+      {waterTempF != null && (
+        <MetricRow
+          label="Water temp"
+          value={`${Math.round(waterTempF)}°F`}
+        />
+      )}
+
       {/* Divider */}
       <div style={{ height: 1, background: 'rgba(255,255,255,0.06)' }} />
 
@@ -170,7 +178,11 @@ export default function SideCard({ side, data, windDirDeg, forecast, airTempF })
         )}
         <MetricRow
           label="Eff wind"
-          value={windEff != null ? `${windEff.toFixed(1)} kt` : '—'}
+          value={windEff != null
+            ? (windGustKt != null && windGustKt > (data.windSpeedKt ?? 0) + 3
+              ? <span>{windEff.toFixed(1)} kt <span style={{ color: '#ff8a65' }}>G{Math.round(windGustKt)}</span></span>
+              : `${windEff.toFixed(1)} kt`)
+            : '—'}
         />
         <MetricRow
           label="Wind dir"

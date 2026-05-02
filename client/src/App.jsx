@@ -207,7 +207,13 @@ export default function App() {
         })()}
 
         {/* Conditions bar */}
-        <ConditionsBar current={current} nextHilos={data?.nextHilos} />
+        <ConditionsBar
+          current={current}
+          nextHilos={data?.nextHilos}
+          uvIndex={currentForecast?.uvIndex ?? null}
+          precipInPerHr={currentForecast?.precipInPerHr ?? null}
+          precipProbability={currentForecast?.precipProbability ?? null}
+        />
 
         {/* Animated conditions sprite */}
         {scores && (
@@ -231,9 +237,13 @@ export default function App() {
         {scores && (
           <div className="flex gap-3">
             <SideCard side="north" data={scores.north} windDirDeg={windDirDeg}
-              forecast={data?.forecast} airTempF={current?.airTempF} />
+              forecast={data?.forecast} airTempF={current?.airTempF}
+              windGustKt={current?.windGustKt ?? null}
+              waterTempF={current?.waterTempF ?? null} />
             <SideCard side="south" data={scores.south} windDirDeg={windDirDeg}
-              forecast={data?.forecast} airTempF={current?.airTempF} />
+              forecast={data?.forecast} airTempF={current?.airTempF}
+              windGustKt={current?.windGustKt ?? null}
+              waterTempF={current?.waterTempF ?? null} />
           </div>
         )}
 
