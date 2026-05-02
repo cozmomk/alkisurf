@@ -143,10 +143,10 @@ export default function App() {
         <header className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black tracking-tight" style={{ color: '#e2eef7' }}>
+              <h1 className="font-black tracking-tight" style={{ color: '#e2eef7', fontFamily: "'Barlow Condensed', system-ui", fontSize: 28, letterSpacing: '0.04em' }}>
                 ALKI
               </h1>
-              <span className="text-2xl font-light" style={{ color: '#5a7fa0' }}>surf</span>
+              <span className="font-light" style={{ color: '#5a7fa0', fontFamily: "'Barlow Condensed', system-ui", fontSize: 28, letterSpacing: '0.08em' }}>surf</span>
             </div>
             <p className="text-xs mt-0.5" style={{ color: '#5a7fa0' }}>
               West Seattle · Puget Sound conditions
