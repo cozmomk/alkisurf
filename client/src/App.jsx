@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, Component } from 'react';
+import { useState, useEffect, useCallback, Component } from 'react';
 
 export class ErrorBoundary extends Component {
   state = { err: null };
@@ -20,7 +20,6 @@ import WebcamPanel from './components/WebcamPanel.jsx';
 import InstallNudge from './components/InstallNudge.jsx';
 import ReportButton from './components/ReportButton.jsx';
 import ConditionsSprite from './components/ConditionsSprite.jsx';
-import GodModePanel, { valsFromUrl, valsToOverrides } from './components/GodModePanel.jsx';
 import ConditionsHistory from './components/ConditionsHistory.jsx';
 import InsightsPanel from './components/InsightsPanel.jsx';
 
@@ -99,17 +98,8 @@ export default function App() {
 
   const [tick, setTick] = useState(0);
 
-  // God Mode — activated by triple-tapping the canvas or via ?god=true URL param
-  const urlVals = useRef(null);
-  const [godMode, setGodMode] = useState(() => {
-    const v = valsFromUrl();
-    urlVals.current = v;
-    return v !== null;
-  });
-  const [godOverrides, setGodOverrides] = useState(() => {
-    const v = valsFromUrl();
-    return v ? valsToOverrides(v) : {};
-  });
+  // God Mode — triple-tap the canvas to enter, triple-tap again to exit
+  const [godMode, setGodMode] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -228,32 +218,27 @@ export default function App() {
           precipProbability={currentForecast?.precipProbability ?? null}
         />
 
-        {/* Animated conditions sprite — God Mode overrides real props when active */}
-        {scores && (() => {
-          const realProps = {
-            score:             Math.max(scores.north.score, scores.south.score),
-            windSpeedKt:       current?.windSpeedKt,
-            windDirDeg:        windDirDeg,
-            windDirLabel:      current?.windDirLabel ?? null,
-            windGustKt:        current?.windGustKt ?? currentForecast?.windGustKt ?? null,
-            skyCover:          currentForecast?.skyCover ?? null,
-            shortForecast:     currentForecast?.shortForecast ?? null,
-            precipProbability: currentForecast?.precipProbability ?? null,
-            uvIndex:           currentForecast?.uvIndex ?? null,
-            precipInPerHr:     currentForecast?.precipInPerHr ?? null,
-            waterTempF:        current?.waterTempF ?? null,
-            tideCurrentFt:     current?.tideCurrentFt ?? null,
-            nextHilos:         data?.nextHilos ?? null,
-            airTempF:          current?.airTempF ?? null,
-          };
-          const spriteProps = godMode ? { ...realProps, ...godOverrides } : realProps;
-          return (
-            <ConditionsSprite
-              {...spriteProps}
-              onTripleTap={() => setGodMode(g => !g)}
-            />
-          );
-        })()}
+        {/* Animated conditions sprite */}
+        {scores && (
+          <ConditionsSprite
+            score={Math.max(scores.north.score, scores.south.score)}
+            windSpeedKt={current?.windSpeedKt}
+            windDirDeg={windDirDeg}
+            windDirLabel={current?.windDirLabel ?? null}
+            windGustKt={current?.windGustKt ?? currentForecast?.windGustKt ?? null}
+            skyCover={currentForecast?.skyCover ?? null}
+            shortForecast={currentForecast?.shortForecast ?? null}
+            precipProbability={currentForecast?.precipProbability ?? null}
+            uvIndex={currentForecast?.uvIndex ?? null}
+            precipInPerHr={currentForecast?.precipInPerHr ?? null}
+            waterTempF={current?.waterTempF ?? null}
+            tideCurrentFt={current?.tideCurrentFt ?? null}
+            nextHilos={data?.nextHilos ?? null}
+            airTempF={current?.airTempF ?? null}
+            godMode={godMode}
+            onTripleTap={() => setGodMode(g => !g)}
+          />
+        )}
 
         {/* Side cards */}
         {scores && (
@@ -316,23 +301,6 @@ export default function App() {
         </p>
       </div>
 
-      {/* God Mode panel — slide-up when active */}
-      {godMode && (
-        <GodModePanel
-          initialVals={urlVals.current ?? undefined}
-          records={data?.records ?? null}
-          onOverridesChange={setGodOverrides}
-          onClose={() => {
-            setGodMode(false);
-            // Clear ?god= params from URL without page reload
-            const url = new URL(window.location.href);
-            if (url.searchParams.has('god')) {
-              url.search = '';
-              window.history.replaceState({}, '', url.toString());
-            }
-          }}
-        />
-      )}
     </>
   );
 }

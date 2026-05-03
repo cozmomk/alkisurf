@@ -422,7 +422,9 @@ function cloudX(ox, spd, t) {
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
-export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 0, windDirLabel = null, windGustKt = null, skyCover = null, shortForecast = null, precipProbability = null, uvIndex = null, precipInPerHr = null, waterTempF = null, tideCurrentFt = null, nextHilos = null, airTempF = null, onTripleTap = null }) {
+const SKY_CYCLE = ['sunny', 'partly', 'overcast', 'rain', 'storm', 'snow', 'night'];
+
+export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 0, windDirLabel = null, windGustKt = null, skyCover = null, shortForecast = null, precipProbability = null, uvIndex = null, precipInPerHr = null, waterTempF = null, tideCurrentFt = null, nextHilos = null, airTempF = null, godMode = false, onTripleTap = null }) {
   const canvasRef    = useRef(null);
   const scoreRef     = useRef(score ?? 0);
   const windRef      = useRef(windSpeedKt ?? 0);
@@ -439,11 +441,139 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
   useEffect(() => { tideRef.current = { tideCurrentFt, nextHilos }; }, [tideCurrentFt, nextHilos]);
   useEffect(() => { overlayRef.current = { windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF }; }, [windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF]);
 
-  // Triple-tap detection — keep callback in a ref so the handler never goes stale
+  // ── God Mode state ────────────────���───────────────────────────────────────
+  const godModeRef  = useRef(false);
+  const godStateRef = useRef(null); // { skyKey, score, paddlerX, windKt, wobbleTs, boltTs, activatedAt }
+
+  // Snapshot live values when god mode activates
+  useEffect(() => {
+    const wasActive = godModeRef.current;
+    godModeRef.current = !!godMode;
+    if (!wasActive && godMode) {
+      const { skyCover: sc, shortForecast: sf, precipProbability: pp, airTempF: atf } = skyRef.current;
+      godStateRef.current = {
+        skyKey:      skyFromData(windRef.current, sc, sf, pp, atf),
+        score:       scoreRef.current,
+        paddlerX:    CX,
+        windKt:      windRef.current,
+        wobbleTs:    null,
+        boltTs:      null,
+        activatedAt: Date.now(),
+      };
+    }
+  }, [godMode]);
+
+  // Pointer interactions — attached only while god mode is active
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!godMode || !canvas) return;
+
+    function canvasCoords(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (clientX - rect.left) * (CW / rect.width),
+        y: (clientY - rect.top)  * (CH / rect.height),
+      };
+    }
+
+    const gesture = { active: false, startX: 0, startY: 0, lastX: 0, lastY: 0, mode: null, moved: false };
+    let lastTapMs = 0;
+
+    function onDown(e) {
+      e.preventDefault();
+      const cx = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+      const cy = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
+      const { x, y } = canvasCoords(cx, cy);
+      const gs = godStateRef.current;
+      if (!gs) return;
+      const nearPaddler = Math.abs(x - gs.paddlerX) < 55 && y > BOARD_Y - 75;
+      const inSky       = y < BOARD_Y - 50;
+      gesture.active = true;
+      gesture.startX = gesture.lastX = x;
+      gesture.startY = gesture.lastY = y;
+      gesture.moved  = false;
+      gesture.mode   = nearPaddler ? 'paddler' : inSky ? 'sky' : 'wave';
+      canvas.setPointerCapture?.(e.pointerId);
+    }
+
+    function onMove(e) {
+      if (!gesture.active) return;
+      e.preventDefault();
+      const cx = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+      const cy = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
+      const { x, y } = canvasCoords(cx, cy);
+      const dx = x - gesture.lastX;
+      const dy = y - gesture.lastY;
+      const gs = godStateRef.current;
+      if (!gs) return;
+
+      if (gesture.mode === 'paddler') {
+        gs.paddlerX = Math.max(40, Math.min(CW - 40, gs.paddlerX + dx));
+      } else if (gesture.mode === 'wave') {
+        // drag up = more chop (lower score), drag down = glassier (higher score)
+        gs.score = Math.max(0, Math.min(10, gs.score - dy * 0.055));
+      } else if (gesture.mode === 'sky') {
+        // horizontal drag = wind speed
+        gs.windKt = Math.max(0, Math.min(30, gs.windKt + dx * 0.07));
+      }
+
+      gesture.lastX = x;
+      gesture.lastY = y;
+      if (Math.abs(x - gesture.startX) > 8 || Math.abs(y - gesture.startY) > 8) gesture.moved = true;
+    }
+
+    function onUp(e) {
+      if (!gesture.active) return;
+      gesture.active = false;
+      if (gesture.moved) return; // drag, not tap
+
+      const cx = e.clientX ?? e.changedTouches?.[0]?.clientX ?? gesture.startX;
+      const cy = e.clientY ?? e.changedTouches?.[0]?.clientY ?? gesture.startY;
+      // Recalculate using stored start if clientX isn't available
+      const { x, y } = canvasCoords(cx, cy);
+
+      const gs = godStateRef.current;
+      if (!gs) return;
+
+      const now = Date.now();
+      const nearPaddler = Math.abs(x - gs.paddlerX) < 55 && y > BOARD_Y - 75;
+      const inSky       = y < BOARD_Y - 50;
+
+      if (nearPaddler) {
+        gs.wobbleTs = now;
+      } else if (inSky) {
+        if (now - lastTapMs < 380) {
+          // Double-tap → lightning bolt
+          gs.boltTs  = now;
+          lastTapMs  = 0;
+        } else {
+          // Single tap → cycle sky
+          const idx  = SKY_CYCLE.indexOf(gs.skyKey);
+          gs.skyKey  = SKY_CYCLE[(idx + 1) % SKY_CYCLE.length];
+          lastTapMs  = now;
+        }
+      }
+    }
+
+    canvas.addEventListener('pointerdown', onDown, { passive: false });
+    canvas.addEventListener('pointermove', onMove, { passive: false });
+    canvas.addEventListener('pointerup',   onUp);
+    canvas.style.cursor = 'pointer';
+
+    return () => {
+      canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerup',   onUp);
+      canvas.style.cursor = 'default';
+    };
+  }, [godMode]);
+
+  // ── Triple-tap (enter/exit god mode) ─────────────────────────────────────
   const tripleTapCbRef = useRef(onTripleTap);
   useEffect(() => { tripleTapCbRef.current = onTripleTap; }, [onTripleTap]);
   const tapStateRef = useRef({ count: 0, timer: null });
   function handleTap() {
+    if (godModeRef.current) return; // god mode uses its own pointer handlers
     tapStateRef.current.count++;
     clearTimeout(tapStateRef.current.timer);
     tapStateRef.current.timer = setTimeout(() => { tapStateRef.current.count = 0; }, 600);
@@ -549,7 +679,10 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
       const dt = lastTime ? Math.min((now - lastTime) / 1000, 0.05) : 0;
       lastTime = now;
 
-      const score   = scoreRef.current;
+      // God mode overrides — read from interactive god state when active
+      const gs = godModeRef.current ? godStateRef.current : null;
+
+      const score   = gs ? gs.score : scoreRef.current;
       const hs      = scoreToHs(score);
       const spd     = .01 + hs * .07;
       ph1 += spd; ph2 += spd * 1.13; ph3 += spd * .79;
@@ -569,13 +702,13 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
       const color   = COLORS[Math.round(score)];
       const [r, g, b] = hexRgb(color);
 
-      // Sky condition
-      const wind = windRef.current;
+      // Sky condition (god mode overrides skyFromData entirely)
+      const wind = gs ? gs.windKt : windRef.current;
       const { skyCover: sc, shortForecast: sf, precipProbability: pp, airTempF: atf } = skyRef.current;
-      const skyKey = skyFromData(wind, sc, sf, pp, atf);
+      const skyKey = gs?.skyKey ?? skyFromData(wind, sc, sf, pp, atf);
 
       // Shared wind variables — used by clouds, rain, and streaks
-      const windKt     = windRef.current;
+      const windKt     = gs ? gs.windKt : windRef.current;
       const dirX       = -Math.sin(windDirRef.current * Math.PI / 180);
       const windFactor = Math.min(1, Math.max(0, (windKt - 3) / 11)); // 0 at ≤3 kt, 1 at ≥14 kt
       // Rain lean: base -1 (slight left), scales with wind direction and speed (±16 px)
@@ -753,6 +886,20 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
         }
       }
 
+      // God lightning — double-tap sky fires a bolt regardless of weather
+      if (gs?.boltTs != null) {
+        const age = (Date.now() - gs.boltTs) / 1000;
+        if (age < 0.45) {
+          // Reuse the bolt object but override timing with wall-clock age
+          const fakeBolt = { ...bolt, active: true, startT: t - age, dur: 0.32 };
+          drawLightning(ctx, fakeBolt, t);
+          if (age < 0.06) {
+            ctx.fillStyle = `rgba(200,220,255,${(0.06 - age) / 0.06 * 0.12})`;
+            ctx.fillRect(0, 0, CW, BOARD_Y);
+          }
+        }
+      }
+
       // Snow accumulation — thin white dusting on wave crests when snowing
       if (skyKey === 'snow') {
         ctx.save();
@@ -776,22 +923,31 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
 
       // Sprite figure
       if (_spriteLoaded) {
+        const paddlerX = gs ? gs.paddlerX : CX;
         const pi  = poseOf(score);
         const col = POSE_COLS[pi];
         // Periodically show row-1 alternate poses (every ALT_PERIOD s, for ALT_DURATION s)
         const cyclePos = t % ALT_PERIOD;
         const row = cyclePos > (ALT_PERIOD - ALT_DURATION) ? 1 : 0;
         const { canvas: sprite, w: sw, h: sh } = _colorizeSprite(col, row, color);
-        const waterY = wy(CX, ph1, ph2, ph3, waveAmp, tideOffset);
+        const waterY = wy(paddlerX, ph1, ph2, ph3, waveAmp, tideOffset);
         const scale  = DRAW_H / sh;
         const dw     = sw * scale;
         const SAMPLE = 6;
-        const slope  = (wy(CX+SAMPLE, ph1, ph2, ph3, waveAmp, tideOffset) - wy(CX-SAMPLE, ph1, ph2, ph3, waveAmp, tideOffset)) / (2*SAMPLE);
+        const slope  = (wy(paddlerX+SAMPLE, ph1, ph2, ph3, waveAmp, tideOffset) - wy(paddlerX-SAMPLE, ph1, ph2, ph3, waveAmp, tideOffset)) / (2*SAMPLE);
         const MAX_TILT = 18 * Math.PI / 180;
         const angle  = Math.max(-MAX_TILT, Math.min(MAX_TILT, Math.atan(slope)));
+        // God mode: wobble animation when paddler is tapped
+        let godWobble = 0;
+        if (gs?.wobbleTs != null) {
+          const age = (Date.now() - gs.wobbleTs) / 1000;
+          if (age < 0.9) {
+            godWobble = Math.sin(age * 22) * Math.exp(-age * 5) * (14 * Math.PI / 180);
+          }
+        }
         ctx.save();
-        ctx.translate(CX, waterY + BOARD_SINK);
-        ctx.rotate(angle);
+        ctx.translate(paddlerX, waterY + BOARD_SINK);
+        ctx.rotate(angle + godWobble);
         ctx.drawImage(sprite, -dw/2, -DRAW_H + CROP_PAD_BOTTOM * scale, dw, DRAW_H);
         ctx.restore();
       }
@@ -839,12 +995,35 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
       ctx.save();
       ctx.font = '600 11px system-ui';
       ctx.textAlign = 'left';
-      ctx.fillStyle = 'rgba(200,223,240,0.55)';
       const lineH = 15;
       let lineY = CH - 10;
-      if (detailLine) { ctx.fillText(detailLine, 14, lineY); lineY -= lineH; }
-      if (windLine)   { ctx.fillText(windLine, 14, lineY);   lineY -= lineH; }
-      if (skyLabel)     ctx.fillText(skyLabel, 14, lineY);
+
+      if (gs) {
+        // God mode HUD — sky label replaced with ⚡ badge
+        // Hint text fades in immediately and out after 3s
+        const hintAge = gs.activatedAt ? (Date.now() - gs.activatedAt) / 1000 : 999;
+        if (hintAge < 4.5) {
+          const hintAlpha = hintAge < 0.4 ? hintAge / 0.4 : hintAge > 3.5 ? Math.max(0, 1 - (hintAge - 3.5)) : 1;
+          ctx.fillStyle = `rgba(0,232,135,${hintAlpha * 0.55})`;
+          ctx.font = '500 10px system-ui';
+          ctx.fillText('tap sky · drag paddler · swipe waves · ✕✕✕ exit', 14, CH - 10);
+          lineY -= lineH;
+        }
+        if (windLine) {
+          ctx.fillStyle = 'rgba(200,223,240,0.55)';
+          ctx.font = '600 11px system-ui';
+          ctx.fillText(windLine, 14, lineY);
+          lineY -= lineH;
+        }
+        ctx.fillStyle = 'rgba(0,232,135,0.75)';
+        ctx.font = '700 11px system-ui';
+        ctx.fillText('⚡ GOD MODE', 14, lineY);
+      } else {
+        ctx.fillStyle = 'rgba(200,223,240,0.55)';
+        if (detailLine) { ctx.fillText(detailLine, 14, lineY); lineY -= lineH; }
+        if (windLine)   { ctx.fillText(windLine, 14, lineY);   lineY -= lineH; }
+        if (skyLabel)     ctx.fillText(skyLabel, 14, lineY);
+      }
       ctx.restore();
 
       rafRef.current = requestAnimationFrame(tick);
