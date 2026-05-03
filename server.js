@@ -38,6 +38,44 @@ function saveRecords(records) {
   fs.writeFileSync(RECORDS_FILE, JSON.stringify(records, null, 2));
 }
 
+// Seed records.json from conditions-log.jsonl on first deploy.
+// Runs once at startup if records.json is missing; never clobbers existing records.
+function bootstrapRecordsFromLog() {
+  if (fs.existsSync(RECORDS_FILE)) return; // already bootstrapped
+  const entries = readJsonl(CONDITIONS_LOG);
+  if (!entries.length) return;
+  console.log(`[records] bootstrapping from ${entries.length} log entries…`);
+
+  const records = {};
+  function checkMax(key, value, ts, extra = {}) {
+    if (value == null || isNaN(value)) return;
+    if (records[key]?.max == null || value > records[key].max)
+      records[key] = { ...records[key], max: value, maxTs: ts, ...extra };
+  }
+  function checkMin(key, value, ts, extra = {}) {
+    if (value == null || isNaN(value)) return;
+    if (records[key]?.min == null || value < records[key].min)
+      records[key] = { ...records[key], min: value, minTs: ts, ...extra };
+  }
+
+  for (const e of entries) {
+    const ts = e.ts;
+    const score = e.north?.score != null || e.south?.score != null
+      ? Math.max(e.north?.score ?? 0, e.south?.score ?? 0)
+      : null;
+    checkMax('windSpeedKt', e.windSpeedKt, ts, { maxWindDir: e.windDirDeg });
+    checkMax('waterTempF',  e.waterTempF,  ts);
+    checkMin('waterTempF',  e.waterTempF,  ts);
+    checkMax('score', score, ts);
+    checkMin('score', score, ts);
+  }
+
+  if (Object.keys(records).length) {
+    saveRecords(records);
+    console.log('[records] bootstrap complete:', JSON.stringify(records, null, 2));
+  }
+}
+
 function updateRecords(current) {
   if (!current) return;
   try {
@@ -501,4 +539,6 @@ app.listen(PORT, () => {
   // Run retention on boot, then weekly
   runRetentionPass();
   setInterval(runRetentionPass, 7 * 24 * 60 * 60 * 1000);
+  // Seed records from historical log (no-op if records.json already exists)
+  bootstrapRecordsFromLog();
 });
