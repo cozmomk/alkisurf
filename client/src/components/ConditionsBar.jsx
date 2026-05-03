@@ -30,7 +30,19 @@ function SkyIcon({ skyCover }) {
   return '☁️';
 }
 
-export default function ConditionsBar({ current, nextHilos, uvIndex, precipInPerHr, precipProbability }) {
+function formatSunTime(ts) {
+  return new Date(ts).toLocaleTimeString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  });
+}
+
+function daylightStr(sunriseTs, sunsetTs) {
+  const mins = Math.round((sunsetTs - sunriseTs) / 60000);
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+export default function ConditionsBar({ current, nextHilos, uvIndex, precipInPerHr, precipProbability, sunriseTs, sunsetTs }) {
   if (!current) {
     return (
       <div className="card px-4 py-3 text-center text-xs" style={{ color: '#5a7fa0' }}>
@@ -106,6 +118,38 @@ export default function ConditionsBar({ current, nextHilos, uvIndex, precipInPer
           )}
         </div>
       </div>
+
+      {(sunriseTs || sunsetTs) && (
+        <>
+          <div style={{ width: '100%', height: 1, background: 'rgba(255,255,255,0.06)', marginTop: 4 }} />
+          <div className="flex items-center justify-center gap-5 w-full pt-2 pb-0.5">
+            {sunriseTs && (
+              <div className="flex items-center gap-1.5">
+                <span style={{ fontSize: 13 }}>🌅</span>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-medium tracking-widest uppercase" style={{ color: '#5a7fa0' }}>Sunrise</span>
+                  <span className="text-[11px] font-semibold" style={{ color: '#e2eef7' }}>{formatSunTime(sunriseTs)}</span>
+                </div>
+              </div>
+            )}
+            {sunriseTs && sunsetTs && (
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] font-medium tracking-widest uppercase" style={{ color: '#3a5a70' }}>Daylight</span>
+                <span className="text-[11px] font-semibold" style={{ color: '#5a7fa0' }}>{daylightStr(sunriseTs, sunsetTs)}</span>
+              </div>
+            )}
+            {sunsetTs && (
+              <div className="flex items-center gap-1.5">
+                <span style={{ fontSize: 13 }}>🌇</span>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-medium tracking-widest uppercase" style={{ color: '#5a7fa0' }}>Sunset</span>
+                  <span className="text-[11px] font-semibold" style={{ color: '#e2eef7' }}>{formatSunTime(sunsetTs)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

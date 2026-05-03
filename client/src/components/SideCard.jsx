@@ -1,4 +1,34 @@
+import { useState } from 'react';
 import { scoreColor, compassLabel, skyEmoji, uvColor, uvLabel, computeTrend } from '../utils.js';
+
+// Solve for effective wind speed needed to hit a target score given current waveFactor
+function windForScore(target, waveFactor) {
+  if (waveFactor == null || waveFactor <= 0) return null;
+  const neededWF = (target / 10) / waveFactor;
+  if (neededWF >= 1) return null; // already achievable at any wind
+  const ratio = 1 - neededWF;
+  if (ratio <= 0) return null;
+  return Math.round(14 * Math.pow(ratio, 2 / 3));
+}
+
+function FactorBar({ label, pct, color, detail, isBottleneck }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[8px] font-medium" style={{ color: isBottleneck ? color : '#5a7fa0' }}>
+          {label}{isBottleneck ? ' ⚠' : ''}
+        </span>
+        <span className="text-[8px] font-semibold" style={{ color }}>{detail}</span>
+      </div>
+      <div style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.08)' }}>
+        <div style={{
+          height: '100%', width: `${pct}%`, borderRadius: 2,
+          background: color, transition: 'width 0.6s ease',
+        }} />
+      </div>
+    </div>
+  );
+}
 
 const SCORE_GLOW = {
   GLASS: 'score-glow-glass',
@@ -75,6 +105,40 @@ export default function SideCard({ side, data, windDirDeg, forecast, airTempF, w
   const glowClass = SCORE_GLOW[label] || '';
   const htFt = Hs != null ? (Hs * 3.281).toFixed(2) : '—';
 
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+
+  // Score factor decomposition
+  const windFactor = windEff != null ? Math.max(0, 1 - Math.pow(windEff / 14, 1.5)) : null;
+  const waveFactor = Hs != null ? Math.max(0, 1 - Hs / 0.5) : null;
+  const windPct = windFactor != null ? Math.round(windFactor * 100) : null;
+  const wavePct = waveFactor != null ? Math.round(waveFactor * 100) : null;
+
+  // Which factor is limiting (threshold: 8 percentage-point gap)
+  const isWindLimited = windFactor != null && waveFactor != null && windFactor < waveFactor - 0.08;
+  const isWaveLimited = windFactor != null && waveFactor != null && waveFactor < windFactor - 0.08;
+
+  // Bottleneck line + gap hint
+  let bottleneckLine = null;
+  if (score < 9 && windFactor != null) {
+    if (isWindLimited) {
+      const targetScore = score < 7 ? 7 : 9;
+      const kt = windForScore(targetScore, waveFactor);
+      bottleneckLine = kt != null
+        ? `Wind limiting · for ${targetScore}/10: drop to ~${kt}kt eff`
+        : 'Wind is the limiting factor';
+    } else if (isWaveLimited) {
+      const waveMsg =
+        waveState === 'residual'  ? 'Residual chop — settling ~20–35 min' :
+        waveState === 'building'  ? `Building ${windDurHrs}h — worsening` :
+        waveState === 'developing'? 'Still developing — near peak' :
+        waveState === 'steady'    ? `Steady on ${(fetchM / 1000).toFixed(1)}km fetch` :
+        'Waves limiting';
+      bottleneckLine = `Waves limiting · ${waveMsg}`;
+    } else if (windFactor < 0.95 || waveFactor < 0.95) {
+      bottleneckLine = 'Wind & waves both limiting';
+    }
+  }
+
   const trend = computeTrend(side, score, forecast);
   const now = Date.now();
   const nextHour = (forecast || []).find(h => h.time > now);
@@ -126,7 +190,43 @@ export default function SideCard({ side, data, windDirDeg, forecast, airTempF, w
         {trend && (
           <span className="text-[9px] font-semibold" style={{ color: trendColor }}>{trendLabel}</span>
         )}
+        {windPct != null && (
+          <button
+            onClick={() => setBreakdownOpen(o => !o)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 8px', minHeight: 28 }}
+          >
+            <span className="text-[8px]" style={{ color: '#3a5a70' }}>
+              {breakdownOpen ? '▲ less' : '▾ why?'}
+            </span>
+          </button>
+        )}
       </div>
+
+      {/* Score breakdown panel */}
+      {breakdownOpen && windPct != null && (
+        <div className="flex flex-col gap-1.5 w-full"
+          style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8 }}>
+          <FactorBar
+            label="Wind"
+            pct={windPct}
+            color={scoreColor(Math.round(windFactor * 10))}
+            detail={`${windPct}% · ${windEff.toFixed(1)}kt`}
+            isBottleneck={isWindLimited}
+          />
+          <FactorBar
+            label="Wave"
+            pct={wavePct}
+            color={scoreColor(Math.round(waveFactor * 10))}
+            detail={`${wavePct}% · ${(Hs * 3.281).toFixed(1)}ft`}
+            isBottleneck={isWaveLimited}
+          />
+          {bottleneckLine && (
+            <span className="text-[8px] leading-tight" style={{ color: '#ff8a65', marginTop: 2 }}>
+              {bottleneckLine}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Swell bar */}
       <div className="flex flex-col gap-1">

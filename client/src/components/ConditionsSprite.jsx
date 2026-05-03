@@ -381,13 +381,16 @@ const SKY_TOPS = { sunny: '#0d2035', partly: '#0d1e30', overcast: '#0c1925', rai
 const SKY_BOTS = { sunny: '#0e3550', partly: '#0e2d44', overcast: '#0d2030', rain: '#0a1c2a', storm: '#07141a', night: '#060d18', snow: '#0d1e2e' };
 
 // ─── sky condition helper ─────────────────────────────────────────────────────
-function isNightNow() {
+function isNightNow(sunriseTs, sunsetTs) {
+  const now = Date.now();
+  if (sunriseTs && sunsetTs) return now < sunriseTs || now > sunsetTs;
+  // Fallback when no astronomical data: static window
   const hour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }));
   return hour >= 20 || hour < 6;
 }
 
-export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbability, airTempF) {
-  if (isNightNow()) return 'night';
+export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbability, airTempF, sunriseTs, sunsetTs) {
+  if (isNightNow(sunriseTs, sunsetTs)) return 'night';
   const forecastText = (shortForecast || '').toLowerCase();
   // God Mode can force night by setting shortForecast to exactly "Night"
   if (forecastText === 'night') return 'night';
@@ -424,12 +427,12 @@ function cloudX(ox, spd, t) {
 // ─── component ────────────────────────────────────────────────────────────────
 const SKY_CYCLE = ['sunny', 'partly', 'overcast', 'rain', 'storm', 'snow', 'night'];
 
-export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 0, windDirLabel = null, windGustKt = null, skyCover = null, shortForecast = null, precipProbability = null, uvIndex = null, precipInPerHr = null, waterTempF = null, tideCurrentFt = null, nextHilos = null, airTempF = null, godMode = false, onTripleTap = null }) {
+export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 0, windDirLabel = null, windGustKt = null, skyCover = null, shortForecast = null, precipProbability = null, uvIndex = null, precipInPerHr = null, waterTempF = null, tideCurrentFt = null, nextHilos = null, airTempF = null, sunriseTs = null, sunsetTs = null, godMode = false, onTripleTap = null }) {
   const canvasRef    = useRef(null);
   const scoreRef     = useRef(score ?? 0);
   const windRef      = useRef(windSpeedKt ?? 0);
   const windDirRef   = useRef(windDirDeg ?? 0);
-  const skyRef       = useRef({ skyCover, shortForecast, precipProbability, airTempF });
+  const skyRef       = useRef({ skyCover, shortForecast, precipProbability, airTempF, sunriseTs, sunsetTs });
   const tideRef      = useRef({ tideCurrentFt, nextHilos });
   const overlayRef   = useRef({ windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF });
   const rafRef       = useRef(null);
@@ -437,7 +440,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
   useEffect(() => { scoreRef.current = score ?? 0; }, [score]);
   useEffect(() => { windRef.current = windSpeedKt ?? 0; }, [windSpeedKt]);
   useEffect(() => { windDirRef.current = windDirDeg ?? 0; }, [windDirDeg]);
-  useEffect(() => { skyRef.current = { skyCover, shortForecast, precipProbability, airTempF }; }, [skyCover, shortForecast, precipProbability, airTempF]);
+  useEffect(() => { skyRef.current = { skyCover, shortForecast, precipProbability, airTempF, sunriseTs, sunsetTs }; }, [skyCover, shortForecast, precipProbability, airTempF, sunriseTs, sunsetTs]);
   useEffect(() => { tideRef.current = { tideCurrentFt, nextHilos }; }, [tideCurrentFt, nextHilos]);
   useEffect(() => { overlayRef.current = { windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF }; }, [windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF]);
 
@@ -704,8 +707,8 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
 
       // Sky condition (god mode overrides skyFromData entirely)
       const wind = gs ? gs.windKt : windRef.current;
-      const { skyCover: sc, shortForecast: sf, precipProbability: pp, airTempF: atf } = skyRef.current;
-      const skyKey = gs?.skyKey ?? skyFromData(wind, sc, sf, pp, atf);
+      const { skyCover: sc, shortForecast: sf, precipProbability: pp, airTempF: atf, sunriseTs: srTs, sunsetTs: ssTs } = skyRef.current;
+      const skyKey = gs?.skyKey ?? skyFromData(wind, sc, sf, pp, atf, srTs, ssTs);
 
       // Shared wind variables — used by clouds, rain, and streaks
       const windKt     = gs ? gs.windKt : windRef.current;
@@ -968,7 +971,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
       // Line 3: condition-specific detail
       let detailLine = null;
       if (skyKey === 'sunny' || skyKey === 'partly') {
-        if (uv != null && !isNightNow()) {
+        if (uv != null && !isNightNow(srTs, ssTs)) {
           detailLine = `UV ${Math.round(uv)} · ${uvLabel(Math.round(uv))}`;
         } else if (wtf != null) {
           detailLine = `Water ${Math.round(wtf)}°F`;

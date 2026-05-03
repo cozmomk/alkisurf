@@ -10,6 +10,7 @@ import { fetchTideData } from './src/fetchers/tides.js';
 import { fetchWeatherForecast } from './src/fetchers/weather.js';
 import { fetchMarineData } from './src/fetchers/marine.js';
 import { fetchUVData } from './src/fetchers/uv.js';
+import { fetchSunTimes } from './src/fetchers/sun.js';
 import { computeGlassScore, findBestWindows } from './src/model/glassScore.js';
 import { compassLabel } from './src/model/fetchGeometry.js';
 
@@ -207,12 +208,13 @@ function runRetentionPass() {
 let cache = { data: null, ts: 0 };
 
 async function buildConditions() {
-  const [buoy, tides, weatherHours, marineHours, uvHours] = await Promise.allSettled([
+  const [buoy, tides, weatherHours, marineHours, uvHours, sunResult] = await Promise.allSettled([
     fetchBuoyData(fetch),
     fetchTideData(fetch),
     fetchWeatherForecast(fetch),
     fetchMarineData(fetch),
     fetchUVData(fetch),
+    fetchSunTimes(fetch),
   ]);
 
   const buoyData = buoy.status === 'fulfilled' ? buoy.value : null;
@@ -221,6 +223,8 @@ async function buildConditions() {
   const marine = marineHours.status === 'fulfilled' ? marineHours.value : [];
   const uvData = uvHours.status === 'fulfilled' ? uvHours.value : [];
 
+  const sunTimes = sunResult.status === 'fulfilled' ? sunResult.value : [];
+  if (sunResult.status === 'rejected') console.error('Sun times fetch error:', sunResult.reason?.message);
   if (buoy.status === 'rejected') console.error('Buoy fetch error:', buoy.reason?.message);
   if (tides.status === 'rejected') console.error('Tides fetch error:', tides.reason?.message);
   if (weatherHours.status === 'rejected') console.error('NWS fetch error:', weatherHours.reason?.message);
@@ -386,7 +390,8 @@ async function buildConditions() {
     forecast: forecastHours,
     bestWindows,
     nextHilos,
-    records: loadRecords(),
+    records:  loadRecords(),
+    sunTimes,
   };
 }
 

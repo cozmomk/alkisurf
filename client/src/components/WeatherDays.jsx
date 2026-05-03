@@ -73,8 +73,15 @@ function fmt(ts, opts) {
   return new Date(ts).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', ...opts });
 }
 
+function fmtSunTime(ts) {
+  return new Date(ts).toLocaleTimeString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  });
+}
+
 function DayCard({ summary, isFirst, isSecond }) {
-  const { highF, lowF, windMin, windMax, gustPeak, windDir, uvPeak, precipMax, precipAmtMax, skyCover, ts, bestWin, northWin, southWin } = summary;
+  const { highF, lowF, windMin, windMax, gustPeak, windDir, uvPeak, precipMax, precipAmtMax, skyCover, ts, bestWin, northWin, southWin, sunriseTs, sunsetTs } = summary;
   const sky = skyEmoji(skyCover, ts);
   const hasWindow = bestWin != null;
   const label = isFirst ? 'Today' : isSecond ? 'Tomorrow' : fmt(ts, { weekday: 'short' });
@@ -136,6 +143,22 @@ function DayCard({ summary, isFirst, isSecond }) {
               </span>
             )}
           </span>
+        </div>
+      )}
+
+      {/* Sunrise / Sunset */}
+      {(sunriseTs || sunsetTs) && (
+        <div className="flex items-center gap-2">
+          {sunriseTs && (
+            <span className="text-[8px]" style={{ color: '#5a7fa0' }}>
+              🌅 {fmtSunTime(sunriseTs)}
+            </span>
+          )}
+          {sunsetTs && (
+            <span className="text-[8px]" style={{ color: '#5a7fa0' }}>
+              🌇 {fmtSunTime(sunsetTs)}
+            </span>
+          )}
         </div>
       )}
 
@@ -206,14 +229,19 @@ function fmtWindow(start, end) {
   return `${s} – ${e}`;
 }
 
-export default function WeatherDays({ forecast, bestWindows }) {
+export default function WeatherDays({ forecast, bestWindows, sunTimes }) {
   if (!forecast?.length) return null;
   const days = groupByDay(forecast);
   if (!days.length) return null;
 
   const todayKey = ptDayKey(Date.now());
   const tomorrowKey = ptDayKey(Date.now() + 86400000);
-  const summaries = days.map(([key, hours]) => summarizeDay(key, hours, bestWindows));
+  const sunMap = Object.fromEntries((sunTimes ?? []).map(s => [s.date, s]));
+  const summaries = days.map(([key, hours]) => {
+    const base = summarizeDay(key, hours, bestWindows);
+    const sun = sunMap[key] ?? null;
+    return { ...base, sunriseTs: sun?.sunriseTs ?? null, sunsetTs: sun?.sunsetTs ?? null };
+  });
 
   return (
     <div className="card p-4 flex flex-col gap-3">

@@ -52,9 +52,8 @@ function SourceBadge({ ok, label }) {
   );
 }
 
-function ModelExplainer({ scores }) {
+function ModelExplainer() {
   const [open, setOpen] = useState(false);
-  const n = scores.north, s = scores.south;
   return (
     <div className="card px-4 py-3">
       <button
@@ -66,7 +65,7 @@ function ModelExplainer({ scores }) {
       </button>
       {open && (
         <div className="flex flex-col gap-3 mt-3 text-[11px]" style={{ color: '#7a9ab8' }}>
-          <p>The glass score combines two factors: <strong style={{color:'#c8dff0'}}>wind</strong> and <strong style={{color:'#c8dff0'}}>waves</strong>, each 0–1, multiplied to give 0–10.</p>
+          <p>The glass score combines two factors: <strong style={{color:'#c8dff0'}}>wind</strong> and <strong style={{color:'#c8dff0'}}>waves</strong>, each 0–1, multiplied to give 0–10. Tap <em style={{color:'#5a7fa0'}}>▾ why?</em> on each side card to see the live breakdown for current conditions.</p>
 
           <div>
             <div className="font-semibold mb-1" style={{color:'#c8dff0'}}>Wind factor</div>
@@ -75,7 +74,7 @@ function ModelExplainer({ scores }) {
 
           <div>
             <div className="font-semibold mb-1" style={{color:'#c8dff0'}}>Wave factor (why N vs S differs)</div>
-            <p>Waves grow with <em>fetch</em> — the distance wind travels over open water before reaching you. Right now: north side {(n.fetch/1000).toFixed(1)}km, south side {(s.fetch/1000).toFixed(1)}km. The side with more fetch builds taller chop from the same wind.</p>
+            <p>Waves grow with <em>fetch</em> — the distance wind travels over open water before reaching you. North side is sheltered (Elliott Bay); south side faces open Sound. Same wind, different chop.</p>
           </div>
 
           <div>
@@ -131,6 +130,12 @@ export default function App() {
   const windDirDeg = current?.windDirDeg ?? 0;
   const scores = current?.scores;
   const currentForecast = data?.forecast?.find(h => h.time >= Date.now()) ?? data?.forecast?.[0] ?? null;
+
+  // Today's sun times — find entry whose UTC date matches today in PT
+  const todayPT = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }); // YYYY-MM-DD
+  const todaySun = data?.sunTimes?.find(s => s.date === todayPT) ?? null;
+  const sunriseTs = todaySun?.sunriseTs ?? null;
+  const sunsetTs  = todaySun?.sunsetTs  ?? null;
 
   // Determine overall best side right now
   const bestSide = scores
@@ -216,6 +221,8 @@ export default function App() {
           uvIndex={currentForecast?.uvIndex ?? null}
           precipInPerHr={currentForecast?.precipInPerHr ?? null}
           precipProbability={currentForecast?.precipProbability ?? null}
+          sunriseTs={sunriseTs}
+          sunsetTs={sunsetTs}
         />
 
         {/* Animated conditions sprite */}
@@ -235,6 +242,8 @@ export default function App() {
             tideCurrentFt={current?.tideCurrentFt ?? null}
             nextHilos={data?.nextHilos ?? null}
             airTempF={current?.airTempF ?? null}
+            sunriseTs={sunriseTs}
+            sunsetTs={sunsetTs}
             godMode={godMode}
             onTripleTap={() => setGodMode(g => !g)}
           />
@@ -255,11 +264,11 @@ export default function App() {
         )}
 
         {/* Model explainer */}
-        {scores && <ModelExplainer scores={scores} />}
+        {scores && <ModelExplainer />}
 
         {/* 3-day outlook + best windows */}
         {data?.forecast?.length > 0 && (
-          <WeatherDays forecast={data.forecast} bestWindows={data.bestWindows} />
+          <WeatherDays forecast={data.forecast} bestWindows={data.bestWindows} sunTimes={data.sunTimes ?? []} />
         )}
 
         {/* Webcam visual check */}
