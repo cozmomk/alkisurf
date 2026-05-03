@@ -25,6 +25,61 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const CONDITIONS_LOG  = path.join(DATA_DIR, 'conditions-log.jsonl');
 const REPORTS_LOG     = path.join(DATA_DIR, 'reports.jsonl');
 const FORECAST_LOG    = path.join(DATA_DIR, 'forecast-log.jsonl');
+const RECORDS_FILE    = path.join(DATA_DIR, 'records.json');
+
+// ─── all-time records ─────────────────────────────────────────────────────────
+function loadRecords() {
+  if (!fs.existsSync(RECORDS_FILE)) return {};
+  try { return JSON.parse(fs.readFileSync(RECORDS_FILE, 'utf8')); }
+  catch { return {}; }
+}
+
+function saveRecords(records) {
+  fs.writeFileSync(RECORDS_FILE, JSON.stringify(records, null, 2));
+}
+
+function updateRecords(current) {
+  if (!current) return;
+  try {
+    const records = loadRecords();
+    const now = Date.now();
+    let changed = false;
+
+    function checkMax(key, value, extra = {}) {
+      if (value == null || isNaN(value)) return;
+      if (records[key]?.max == null || value > records[key].max) {
+        records[key] = { ...records[key], max: value, maxTs: now, ...extra };
+        changed = true;
+      }
+    }
+    function checkMin(key, value, extra = {}) {
+      if (value == null || isNaN(value)) return;
+      if (records[key]?.min == null || value < records[key].min) {
+        records[key] = { ...records[key], min: value, minTs: now, ...extra };
+        changed = true;
+      }
+    }
+
+    const score = current.scores
+      ? Math.max(current.scores.north?.score ?? 0, current.scores.south?.score ?? 0)
+      : null;
+
+    checkMax('windSpeedKt',   current.windSpeedKt,   { maxWindDir: current.windDirDeg });
+    checkMax('windGustKt',    current.windGustKt,    { maxWindDir: current.windDirDeg });
+    checkMax('waterTempF',    current.waterTempF);
+    checkMin('waterTempF',    current.waterTempF);
+    checkMax('airTempF',      current.airTempF);
+    checkMin('airTempF',      current.airTempF);
+    checkMax('tideCurrentFt', current.tideCurrentFt);
+    checkMin('tideCurrentFt', current.tideCurrentFt);
+    checkMax('score',         score);
+    checkMin('score',         score);
+
+    if (changed) saveRecords(records);
+  } catch (e) {
+    console.error('[records] update error:', e.message);
+  }
+}
 
 function appendJsonl(file, obj) {
   try { fs.appendFileSync(file, JSON.stringify(obj) + '\n'); } catch (e) { console.error('appendJsonl', e.message); }
@@ -265,6 +320,22 @@ async function buildConditions() {
     .filter(h => h.ts > now)
     .slice(0, 4);
 
+  const currentForApi = current ? {
+    windSpeedKt:   current.speedKt,
+    windGustKt:    current.gustKt,
+    windDirDeg:    current.dirDeg,
+    windDirLabel:  compassLabel(current.dirDeg),
+    waterTempF,
+    airTempF:      current.airTempF,
+    tideCurrentFt: tideData?.currentFt,
+    tideDirection: tideData?.tideDirection,
+    tideRateFtHr,
+    scores:        currentScores,
+  } : null;
+
+  // Update all-time records non-blocking (don't hold up the response)
+  setImmediate(() => updateRecords(currentForApi));
+
   return {
     updatedAt: now,
     sources: {
@@ -273,21 +344,11 @@ async function buildConditions() {
       nws: weatherHours.status === 'fulfilled',
       marine: marineHours.status === 'fulfilled',
     },
-    current: current ? {
-      windSpeedKt: current.speedKt,
-      windGustKt: current.gustKt,
-      windDirDeg: current.dirDeg,
-      windDirLabel: compassLabel(current.dirDeg),
-      waterTempF,
-      airTempF: current.airTempF,
-      tideCurrentFt: tideData?.currentFt,
-      tideDirection: tideData?.tideDirection,
-      tideRateFtHr,
-      scores: currentScores,
-    } : null,
+    current: currentForApi,
     forecast: forecastHours,
     bestWindows,
     nextHilos,
+    records: loadRecords(),
   };
 }
 
@@ -391,6 +452,11 @@ app.post('/api/report', (req, res) => {
   };
   appendJsonl(REPORTS_LOG, entry);
   res.json({ ok: true });
+});
+
+// GET /api/records — all-time highs/lows (also embedded in /api/conditions)
+app.get('/api/records', (req, res) => {
+  res.json(loadRecords());
 });
 
 // GET /api/history — last N logged snapshots

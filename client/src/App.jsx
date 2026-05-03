@@ -320,6 +320,7 @@ export default function App() {
       {godMode && (
         <GodModePanel
           initialVals={urlVals.current ?? undefined}
+          records={data?.records ?? null}
           onOverridesChange={setGodOverrides}
           onClose={() => {
             setGodMode(false);

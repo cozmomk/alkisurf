@@ -26,6 +26,78 @@ const SKY_MAP = {
 
 const SCORE_LABELS = ['No Go','','','Rough','','Chop','','Ripple','','Glass','Glass!'];
 
+// ─── records helpers ──────────────────────────────────────────────────────────
+function shortDate(ts) {
+  if (!ts) return '';
+  return new Date(ts * 1000 > 1e12 ? ts : ts * 1000)
+    .toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+// Build chip presets from the records object.
+// Each chip: { label, icon, vals } where vals is a partial overrides to merge into DEFAULT_VALS
+function buildChips(records) {
+  if (!records) return [];
+  const chips = [];
+
+  if (records.windSpeedKt?.max != null) {
+    const nearestDir = (deg) => {
+      const dirs = [0, 45, 90, 135, 180, 225, 270, 315];
+      return dirs.reduce((a, b) => Math.abs(b - deg) < Math.abs(a - deg) ? b : a);
+    };
+    const windDir = records.windSpeedKt.maxWindDir != null
+      ? nearestDir(records.windSpeedKt.maxWindDir)
+      : 0;
+    chips.push({
+      label: `${Math.round(records.windSpeedKt.max)} kt wind`,
+      sub: shortDate(records.windSpeedKt.maxTs),
+      icon: '💨',
+      vals: { windKt: Math.min(30, Math.round(records.windSpeedKt.max)), windDir, skyKey: 'storm' },
+    });
+  }
+
+  if (records.waterTempF?.max != null) {
+    chips.push({
+      label: `${Math.round(records.waterTempF.max)}°F water`,
+      sub: shortDate(records.waterTempF.maxTs),
+      icon: '🌡',
+      vals: { waterTempF: Math.round(records.waterTempF.max), skyKey: 'sunny' },
+    });
+  }
+
+  if (records.waterTempF?.min != null) {
+    chips.push({
+      label: `${Math.round(records.waterTempF.min)}°F water`,
+      sub: shortDate(records.waterTempF.minTs),
+      icon: '🥶',
+      vals: { waterTempF: Math.round(records.waterTempF.min) },
+    });
+  }
+
+  if (records.score?.max != null && records.score.max >= 7) {
+    chips.push({
+      label: `Score ${Math.round(records.score.max * 10) / 10}`,
+      sub: shortDate(records.score.maxTs),
+      icon: '🪟',
+      vals: { score: records.score.max, skyKey: 'sunny', windKt: 1, tidePct: 50 },
+    });
+  }
+
+  if (records.score?.min != null && records.score.min <= 1) {
+    chips.push({
+      label: `Score ${Math.round(records.score.min * 10) / 10}`,
+      sub: shortDate(records.score.minTs),
+      icon: '💀',
+      vals: {
+        score: records.score.min,
+        skyKey: 'storm',
+        windKt: Math.min(30, Math.round(records.windSpeedKt?.max ?? 20)),
+      },
+    });
+  }
+
+  return chips;
+}
+
 export const DEFAULT_VALS = {
   score: 5, windKt: 8, windDir: 270, skyKey: 'partly',
   tidePct: 50, uvIndex: 3, waterTempF: 55, precipProbability: 0,
@@ -88,8 +160,9 @@ function GodSlider({ label, value, min, max, step = 1, unit = '', onChange }) {
 }
 
 // ─── main component ───────────────────────────────────────────────────────────
-export default function GodModePanel({ onOverridesChange, onClose, initialVals }) {
+export default function GodModePanel({ onOverridesChange, onClose, initialVals, records = null }) {
   const [vals, setVals] = useState(initialVals ?? DEFAULT_VALS);
+  const chips = buildChips(records);
   const [copied, setCopied] = useState(false);
 
   // Push overrides to parent on every change
@@ -145,6 +218,32 @@ export default function GodModePanel({ onOverridesChange, onClose, initialVals }
             style={{ color: '#3a5a70', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}
           >×</button>
         </div>
+
+        {/* Records chips */}
+        {chips.length > 0 && (
+          <div>
+            <div className="text-[10px] mb-2" style={{ color: '#3a5a70' }}>All-time records</div>
+            <div className="flex flex-wrap gap-1.5">
+              {chips.map((chip, i) => (
+                <button key={i}
+                  onClick={() => setVals(v => ({ ...v, ...chip.vals }))}
+                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-all"
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <span style={{ fontSize: 12 }}>{chip.icon}</span>
+                  <div className="flex flex-col items-start">
+                    <span className="text-[10px] font-semibold" style={{ color: '#c8dff0' }}>{chip.label}</span>
+                    {chip.sub && <span className="text-[8px]" style={{ color: '#3a5a70' }}>{chip.sub}</span>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Sky condition */}
         <div>
