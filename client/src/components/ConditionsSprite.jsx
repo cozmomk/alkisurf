@@ -334,6 +334,17 @@ function drawRainLines(ctx, drops, t, speed = 1, heavy = false, leanX = -1, spee
   }
 }
 
+function drawSnow(ctx, drops, t, windLeanX = 0) {
+  for (const d of drops) {
+    const y = ((d.y + t * d.speed) % BOARD_Y + BOARD_Y) % BOARD_Y;
+    const x = d.x + Math.sin(t * 0.7 + d.phase) * d.flutter + windLeanX * 6;
+    ctx.fillStyle = 'rgba(220,235,255,0.72)';
+    ctx.beginPath();
+    ctx.arc(x, y, d.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 function drawLightning(ctx, bolt, t) {
   if (!bolt.active || bolt.startT === null) return;
   const age = t - bolt.startT;
@@ -366,8 +377,8 @@ function makeBolt() {
 }
 
 // ─── sky palettes ─────────────────────────────────────────────────────────────
-const SKY_TOPS = { sunny: '#0d2035', partly: '#0d1e30', overcast: '#0c1925', rain: '#09141f', storm: '#060e12', night: '#04090f' };
-const SKY_BOTS = { sunny: '#0e3550', partly: '#0e2d44', overcast: '#0d2030', rain: '#0a1c2a', storm: '#07141a', night: '#060d18' };
+const SKY_TOPS = { sunny: '#0d2035', partly: '#0d1e30', overcast: '#0c1925', rain: '#09141f', storm: '#060e12', night: '#04090f', snow: '#0b1520' };
+const SKY_BOTS = { sunny: '#0e3550', partly: '#0e2d44', overcast: '#0d2030', rain: '#0a1c2a', storm: '#07141a', night: '#060d18', snow: '#0d1e2e' };
 
 // ─── sky condition helper ─────────────────────────────────────────────────────
 function isNightNow() {
@@ -375,12 +386,15 @@ function isNightNow() {
   return hour >= 20 || hour < 6;
 }
 
-export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbability) {
+export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbability, airTempF) {
   if (isNightNow()) return 'night';
   const forecastText = (shortForecast || '').toLowerCase();
   const isRaining = /rain|shower|drizzle/.test(forecastText) || (precipProbability != null && precipProbability > 50);
+  const isSnowing = /snow|flurr|blizzard|sleet|wintry/.test(forecastText)
+    || (airTempF != null && airTempF < 34 && isRaining);
   const isThunder = /thunder/.test(forecastText);
   if (isThunder) return 'storm';
+  if (isSnowing) return 'snow';
   if (skyCover == null) return isRaining ? 'rain' : 'sunny';
   if (skyCover <= 15) return 'sunny';
   if (skyCover <= 35) return isRaining ? 'rain' : 'partly';
@@ -388,7 +402,7 @@ export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbabil
   return isRaining ? 'rain' : 'overcast';
 }
 
-const SKY_LABELS = { sunny: 'Sunny', partly: 'Partly cloudy', overcast: 'Overcast', rain: 'Rain', storm: 'Storm', night: 'Night' };
+const SKY_LABELS = { sunny: 'Sunny', partly: 'Partly cloudy', overcast: 'Overcast', rain: 'Rain', storm: 'Storm', night: 'Night', snow: 'Snowing' };
 
 function realTidePct(currentFt, hilos) {
   if (currentFt == null || !hilos?.length) return null;
@@ -406,12 +420,12 @@ function cloudX(ox, spd, t) {
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
-export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 0, windDirLabel = null, windGustKt = null, skyCover = null, shortForecast = null, precipProbability = null, uvIndex = null, precipInPerHr = null, waterTempF = null, tideCurrentFt = null, nextHilos = null }) {
+export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 0, windDirLabel = null, windGustKt = null, skyCover = null, shortForecast = null, precipProbability = null, uvIndex = null, precipInPerHr = null, waterTempF = null, tideCurrentFt = null, nextHilos = null, airTempF = null }) {
   const canvasRef    = useRef(null);
   const scoreRef     = useRef(score ?? 0);
   const windRef      = useRef(windSpeedKt ?? 0);
   const windDirRef   = useRef(windDirDeg ?? 0);
-  const skyRef       = useRef({ skyCover, shortForecast, precipProbability });
+  const skyRef       = useRef({ skyCover, shortForecast, precipProbability, airTempF });
   const tideRef      = useRef({ tideCurrentFt, nextHilos });
   const overlayRef   = useRef({ windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF });
   const rafRef       = useRef(null);
@@ -419,7 +433,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
   useEffect(() => { scoreRef.current = score ?? 0; }, [score]);
   useEffect(() => { windRef.current = windSpeedKt ?? 0; }, [windSpeedKt]);
   useEffect(() => { windDirRef.current = windDirDeg ?? 0; }, [windDirDeg]);
-  useEffect(() => { skyRef.current = { skyCover, shortForecast, precipProbability }; }, [skyCover, shortForecast, precipProbability]);
+  useEffect(() => { skyRef.current = { skyCover, shortForecast, precipProbability, airTempF }; }, [skyCover, shortForecast, precipProbability, airTempF]);
   useEffect(() => { tideRef.current = { tideCurrentFt, nextHilos }; }, [tideCurrentFt, nextHilos]);
   useEffect(() => { overlayRef.current = { windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF }; }, [windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF]);
 
@@ -491,6 +505,15 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
     const bolt = makeBolt();
     let nextBoltT = 1.8 + Math.random() * 2;
 
+    const snowDrops = Array.from({ length: 80 }, () => ({
+      x:       Math.random() * CW,
+      y:       Math.random() * BOARD_Y,
+      speed:   22 + Math.random() * 18,    // slow drift vs rain's 85–140
+      r:       1.5 + Math.random() * 2,    // circles not lines
+      flutter: 18 + Math.random() * 22,    // wide horizontal sine
+      phase:   Math.random() * Math.PI * 2,
+    }));
+
     // Wind streaks — 42 particles scattered across the sky
     const windStreaks = Array.from({ length: 42 }, () => ({
       x:       Math.random() * CW,
@@ -532,8 +555,8 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
 
       // Sky condition
       const wind = windRef.current;
-      const { skyCover: sc, shortForecast: sf, precipProbability: pp } = skyRef.current;
-      const skyKey = skyFromData(wind, sc, sf, pp);
+      const { skyCover: sc, shortForecast: sf, precipProbability: pp, airTempF: atf } = skyRef.current;
+      const skyKey = skyFromData(wind, sc, sf, pp, atf);
 
       // Shared wind variables — used by clouds, rain, and streaks
       const windKt     = windRef.current;
@@ -556,6 +579,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
         overcastLo.forEach(moveCloud);
         rainClouds.forEach(moveCloud);
         stormClouds.forEach(moveCloud);
+        // snow reuses overcastHi/Lo clouds — already moved above
       }
 
       // Sky background gradient
@@ -621,6 +645,24 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
       } else if (skyKey === 'night') {
         drawStars(ctx, stars, t);
         drawMoon(ctx, CW - 68, 52, 28, phase, t);
+
+      } else if (skyKey === 'snow') {
+        // Overcast low ceiling — reuse overcastHi/Lo for a dark grey blanket
+        for (const c of overcastHi) drawCloud(ctx, c.x, c.oy + 8,  c.sc, c.a * 0.85);
+        for (const c of overcastLo) drawCloud(ctx, c.x, c.oy + 18, c.sc, c.a * 0.70);
+        const snowCeil = ctx.createLinearGradient(0, 0, 0, 80);
+        snowCeil.addColorStop(0, 'rgba(130,155,185,.18)');
+        snowCeil.addColorStop(1, 'rgba(110,140,170,0)');
+        ctx.fillStyle = snowCeil;
+        ctx.fillRect(0, 0, CW, 80);
+        // Snowflake particles
+        drawSnow(ctx, snowDrops, t, dirX * windFactor);
+        // Cold ground mist near waterline
+        const snowMist = ctx.createLinearGradient(0, BOARD_Y - 20, 0, BOARD_Y + tideOffset);
+        snowMist.addColorStop(0, 'rgba(180,210,235,0)');
+        snowMist.addColorStop(1, 'rgba(160,195,225,.07)');
+        ctx.fillStyle = snowMist;
+        ctx.fillRect(0, BOARD_Y - 20, CW, 20 + Math.max(0, tideOffset));
       }
 
       // Wind streaks — scale 0 at ≤3 kt, full at ≥14 kt (uses shared windFactor/dirX)
@@ -695,6 +737,24 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
         }
       }
 
+      // Snow accumulation — thin white dusting on wave crests when snowing
+      if (skyKey === 'snow') {
+        ctx.save();
+        const STEP = 18;
+        for (let wx = STEP; wx < CW - STEP; wx += STEP) {
+          const yC = wy(wx, ph1, ph2, ph3, waveAmp, tideOffset);
+          const yL = wy(wx - STEP, ph1, ph2, ph3, waveAmp, tideOffset);
+          const yR = wy(wx + STEP, ph1, ph2, ph3, waveAmp, tideOffset);
+          if (yC < yL && yC < yR) {
+            ctx.fillStyle = 'rgba(210,228,248,0.22)';
+            ctx.beginPath();
+            ctx.ellipse(wx, yC - 0.5, 7 + Math.sin(wx * 3.1) * 2, 1.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      }
+
       // Tide gauge
       drawTideGauge(ctx, color, tideLevel);
 
@@ -752,6 +812,12 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
         if (pct != null && amt) detailLine = `${Math.round(pct)}% · ${amt}`;
         else if (pct != null)   detailLine = `${Math.round(pct)}% chance`;
         else if (amt)           detailLine = amt;
+      } else if (skyKey === 'snow') {
+        const tempStr = atf != null ? `${Math.round(atf)}°F air` : null;
+        const pct = skyRef.current.precipProbability;
+        if (tempStr && pct != null) detailLine = `${Math.round(pct)}% · ${tempStr}`;
+        else if (tempStr)           detailLine = tempStr;
+        else if (pct != null)       detailLine = `${Math.round(pct)}% chance`;
       }
 
       ctx.save();

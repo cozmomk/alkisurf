@@ -231,6 +231,7 @@ export default function App() {
             waterTempF={current?.waterTempF ?? null}
             tideCurrentFt={current?.tideCurrentFt ?? null}
             nextHilos={data?.nextHilos ?? null}
+            airTempF={current?.airTempF ?? null}
           />
         )}
 
