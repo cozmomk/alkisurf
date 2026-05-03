@@ -389,6 +389,8 @@ function isNightNow() {
 export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbability, airTempF) {
   if (isNightNow()) return 'night';
   const forecastText = (shortForecast || '').toLowerCase();
+  // God Mode can force night by setting shortForecast to exactly "Night"
+  if (forecastText === 'night') return 'night';
   const isRaining = /rain|shower|drizzle/.test(forecastText) || (precipProbability != null && precipProbability > 50);
   const isSnowing = /snow|flurr|blizzard|sleet|wintry/.test(forecastText)
     || (airTempF != null && airTempF < 34 && isRaining);
@@ -420,7 +422,7 @@ function cloudX(ox, spd, t) {
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
-export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 0, windDirLabel = null, windGustKt = null, skyCover = null, shortForecast = null, precipProbability = null, uvIndex = null, precipInPerHr = null, waterTempF = null, tideCurrentFt = null, nextHilos = null, airTempF = null }) {
+export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 0, windDirLabel = null, windGustKt = null, skyCover = null, shortForecast = null, precipProbability = null, uvIndex = null, precipInPerHr = null, waterTempF = null, tideCurrentFt = null, nextHilos = null, airTempF = null, onTripleTap = null }) {
   const canvasRef    = useRef(null);
   const scoreRef     = useRef(score ?? 0);
   const windRef      = useRef(windSpeedKt ?? 0);
@@ -436,6 +438,20 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
   useEffect(() => { skyRef.current = { skyCover, shortForecast, precipProbability, airTempF }; }, [skyCover, shortForecast, precipProbability, airTempF]);
   useEffect(() => { tideRef.current = { tideCurrentFt, nextHilos }; }, [tideCurrentFt, nextHilos]);
   useEffect(() => { overlayRef.current = { windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF }; }, [windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF]);
+
+  // Triple-tap detection — keep callback in a ref so the handler never goes stale
+  const tripleTapCbRef = useRef(onTripleTap);
+  useEffect(() => { tripleTapCbRef.current = onTripleTap; }, [onTripleTap]);
+  const tapStateRef = useRef({ count: 0, timer: null });
+  function handleTap() {
+    tapStateRef.current.count++;
+    clearTimeout(tapStateRef.current.timer);
+    tapStateRef.current.timer = setTimeout(() => { tapStateRef.current.count = 0; }, 600);
+    if (tapStateRef.current.count >= 3) {
+      tapStateRef.current.count = 0;
+      tripleTapCbRef.current?.();
+    }
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -848,7 +864,8 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
       ref={canvasRef}
       width={CW}
       height={CH}
-      style={{ width: '100%', height: 'auto', borderRadius: 12, display: 'block' }}
+      onClick={handleTap}
+      style={{ width: '100%', height: 'auto', borderRadius: 12, display: 'block', cursor: 'default' }}
     />
   );
 }
