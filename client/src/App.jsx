@@ -223,6 +223,7 @@ export default function App() {
           precipProbability={currentForecast?.precipProbability ?? null}
           sunriseTs={sunriseTs}
           sunsetTs={sunsetTs}
+          forecast={data?.forecast ?? []}
         />
 
         {/* Animated conditions sprite */}
@@ -274,15 +275,7 @@ export default function App() {
         {/* Webcam visual check */}
         <WebcamPanel />
 
-        {/* Forecast strip */}
-        {data?.forecast?.length > 0 && (
-          <div className="card p-4">
-            <div className="mb-3">
-              <span className="section-title">48-Hour Forecast</span>
-            </div>
-            <ForecastStrip forecast={data.forecast} />
-          </div>
-        )}
+        {/* Forecast strip — now accessible via the WIND/AIR pill panels */}
 
         {/* Glass history timeline */}
         <ConditionsHistory />
