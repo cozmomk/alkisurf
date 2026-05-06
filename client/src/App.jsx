@@ -22,10 +22,11 @@ import ReportButton from './components/ReportButton.jsx';
 import ConditionsSprite from './components/ConditionsSprite.jsx';
 import ConditionsHistory from './components/ConditionsHistory.jsx';
 import InsightsPanel from './components/InsightsPanel.jsx';
-import ScoreChart from './components/ScoreChart.jsx';
+import { conditionsEmoji, scoreColor } from './utils.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 const POLL_MS = 5 * 60 * 1000; // 5 minutes
+const STALE_MS = 30 * 60 * 1000; // 30 minutes
 
 function timeAgo(ts) {
   if (!ts) return '';
@@ -67,26 +68,121 @@ function ModelExplainer() {
       {open && (
         <div className="flex flex-col gap-3 mt-3 text-[11px]" style={{ color: '#7a9ab8' }}>
           <p>The glass score combines two factors: <strong style={{color:'#c8dff0'}}>wind</strong> and <strong style={{color:'#c8dff0'}}>waves</strong>, each 0–1, multiplied to give 0–10. Tap <em style={{color:'#5a7fa0'}}>▾ why?</em> on each side card to see the live breakdown for current conditions.</p>
-
           <div>
             <div className="font-semibold mb-1" style={{color:'#c8dff0'}}>Wind factor</div>
             <p>Effective wind = 65% sustained + 35% gust. Scores drop sharply above 8kt and hit zero at 14kt — above that, the water is too rough regardless of waves.</p>
           </div>
-
           <div>
             <div className="font-semibold mb-1" style={{color:'#c8dff0'}}>Wave factor (why N vs S differs)</div>
             <p>Waves grow with <em>fetch</em> — the distance wind travels over open water before reaching you. North side is sheltered (Elliott Bay); south side faces open Sound. Same wind, different chop.</p>
           </div>
-
           <div>
             <div className="font-semibold mb-1" style={{color:'#c8dff0'}}>Duration matters</div>
             <p>Waves don't appear instantly. Fresh wind takes 30–90 min to build fully developed chop over Puget Sound fetch distances. The score reflects this: a new wind gust scores higher than the same wind sustained for 2 hours.</p>
             <p className="mt-1">When wind dies, chop lingers for ~35 min. The score shows "residual chop" during this window.</p>
           </div>
-
           <p style={{color:'#3a5a70'}}>Data: NDBC buoy WPOW1 (West Point, 1.5mi N) · NWS hourly forecast · Open-Meteo marine · NOAA tides</p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Smart glass window banner ────────────────────────────────────────────────
+
+function findNextGlassWindow(forecast) {
+  const now = Date.now();
+  const upcoming = (forecast ?? []).filter(h => h.time > now && h.sides?.north != null);
+  const hit = upcoming.find(h => Math.max(h.sides.north.score, h.sides.south.score) >= 7);
+  if (!hit) return null;
+  const side = hit.sides.north.score >= hit.sides.south.score ? 'north' : 'south';
+  return {
+    ts:            hit.time,
+    score:         Math.max(hit.sides.north.score, hit.sides.south.score),
+    side,
+    airTempF:      hit.airTempF ?? null,
+    skyCover:      hit.skyCover ?? null,
+    shortForecast: hit.shortForecast ?? null,
+  };
+}
+
+function formatWindowTime(ts) {
+  const timeStr = new Date(ts).toLocaleTimeString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric', hour12: true,
+  });
+  const isToday = new Date(ts).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })
+    === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+  return isToday ? `${timeStr} today` : `${timeStr} tomorrow`;
+}
+
+function SmartBanner({ scores, forecast }) {
+  if (!scores) return null;
+
+  const maxScore  = Math.max(scores.north.score, scores.south.score);
+  const gap       = Math.abs(scores.north.score - scores.south.score);
+  const bestSide  = scores.north.score >= scores.south.score ? 'north' : 'south';
+  const sideLabel = bestSide === 'north' ? 'North' : 'South';
+
+  // ── GLASS NOW — bold celebratory state ───────────────────────────────────
+  if (maxScore >= 7) {
+    const bothGlass = gap === 0;
+    return (
+      <div className="card px-4 py-3"
+        style={{ background: 'rgba(0, 232, 135, 0.09)', borderColor: 'rgba(0, 232, 135, 0.35)' }}>
+        <div className="flex items-center gap-3">
+          <span style={{ fontSize: 22 }}>🪟</span>
+          <div className="flex flex-col">
+            <span className="font-black" style={{ color: '#00e887', fontSize: 18, lineHeight: 1.1 }}>
+              {bothGlass ? 'Both sides glass' : `${sideLabel} side glass`}
+            </span>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-sm font-bold" style={{ color: scoreColor(maxScore) }}>
+                {maxScore}/10
+              </span>
+              {!bothGlass && gap > 0 && (
+                <span className="text-[10px]" style={{ color: '#5a7fa0' }}>{gap} pt gap</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── BOTH ROUGH — no windows coming ───────────────────────────────────────
+  if (maxScore === 0) {
+    const win = findNextGlassWindow(forecast);
+    if (!win) return (
+      <div className="card px-4 py-2.5 flex items-center gap-2"
+        style={{ background: 'rgba(255, 43, 85, 0.06)', borderColor: 'rgba(255, 43, 85, 0.2)' }}>
+        <span style={{ color: '#ff2b55', fontSize: 16 }}>✕</span>
+        <span className="text-sm font-semibold" style={{ color: '#e2eef7' }}>Both sides rough — not a paddling day</span>
+      </div>
+    );
+  }
+
+  // ── GLASS LATER — compact informational state ─────────────────────────────
+  const win = findNextGlassWindow(forecast);
+  if (!win) return null;
+
+  const wxEmoji  = conditionsEmoji(win.skyCover, win.shortForecast, win.ts);
+  const tempStr  = win.airTempF != null ? ` · ${wxEmoji ?? ''} ${Math.round(win.airTempF)}°F` : (wxEmoji ? ` · ${wxEmoji}` : '');
+  const winLabel = win.side === 'north' ? 'N' : 'S';
+  const timeStr  = formatWindowTime(win.ts);
+
+  return (
+    <div className="card px-4 py-2.5 flex items-center gap-2"
+      style={{ background: 'rgba(0, 232, 135, 0.04)', borderColor: 'rgba(0, 232, 135, 0.15)' }}>
+      <span style={{ color: '#5a7fa0', fontSize: 16 }}>◷</span>
+      <div className="flex flex-col">
+        <span className="text-sm font-semibold" style={{ color: '#e2eef7' }}>
+          Glass at {timeStr}
+        </span>
+        <span className="text-[10px]" style={{ color: '#5a7fa0' }}>
+          {win.score}/10 {winLabel}{tempStr}
+        </span>
+      </div>
     </div>
   );
 }
@@ -95,10 +191,7 @@ export default function App() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   const [tick, setTick] = useState(0);
-
-  // God Mode — triple-tap the canvas to enter, triple-tap again to exit
   const [godMode, setGodMode] = useState(false);
 
   const load = useCallback(async () => {
@@ -121,27 +214,24 @@ export default function App() {
     return () => clearInterval(interval);
   }, [load]);
 
-  // Update "N min ago" display
   useEffect(() => {
     const t = setInterval(() => setTick(n => n + 1), 30000);
     return () => clearInterval(t);
   }, []);
 
-  const current = data?.current;
-  const windDirDeg = current?.windDirDeg ?? 0;
-  const scores = current?.scores;
+  const current         = data?.current;
+  const windDirDeg      = current?.windDirDeg ?? 0;
+  const scores          = current?.scores;
   const currentForecast = data?.forecast?.find(h => h.time >= Date.now()) ?? data?.forecast?.[0] ?? null;
 
-  // Today's sun times — find entry whose UTC date matches today in PT
-  const todayPT = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }); // YYYY-MM-DD
+  const todayPT  = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
   const todaySun = data?.sunTimes?.find(s => s.date === todayPT) ?? null;
   const sunriseTs = todaySun?.sunriseTs ?? null;
   const sunsetTs  = todaySun?.sunsetTs  ?? null;
 
-  // Determine overall best side right now
-  const bestSide = scores
-    ? (scores.north.score >= scores.south.score ? 'north' : 'south')
-    : null;
+  // Stale data detection
+  const isStale = data?.updatedAt && (Date.now() - data.updatedAt) > STALE_MS;
+  const staleAgo = data?.updatedAt ? timeAgo(data.updatedAt) : null;
 
   return (
     <>
@@ -177,6 +267,17 @@ export default function App() {
         {/* iOS install nudge */}
         <InstallNudge />
 
+        {/* Stale data warning */}
+        {isStale && (
+          <div className="card px-4 py-2.5 flex items-center gap-2"
+            style={{ background: 'rgba(255, 195, 0, 0.07)', borderColor: 'rgba(255, 195, 0, 0.25)' }}>
+            <span style={{ color: '#ffc300', fontSize: 14 }}>⚠</span>
+            <span className="text-xs" style={{ color: '#ffc300' }}>
+              Showing cached data from {staleAgo} — refresh when online
+            </span>
+          </div>
+        )}
+
         {/* Error state */}
         {error && (
           <div className="card px-4 py-3 text-sm" style={{ color: '#ff6b1a', borderColor: '#ff6b1a44' }}>
@@ -191,70 +292,49 @@ export default function App() {
           </div>
         )}
 
-        {/* Glass score 36h forecast chart */}
-        {data?.forecast?.length > 0 && (
-          <ScoreChart forecast={data.forecast} />
-        )}
-
-        {/* Animated conditions sprite */}
+        {/* Smart banner — bold when glass now, compact when glass later */}
         {scores && (
-          <ConditionsSprite
-            score={Math.max(scores.north.score, scores.south.score)}
-            windSpeedKt={current?.windSpeedKt}
-            windDirDeg={windDirDeg}
-            windDirLabel={current?.windDirLabel ?? null}
-            windGustKt={current?.windGustKt ?? currentForecast?.windGustKt ?? null}
-            skyCover={currentForecast?.skyCover ?? null}
-            shortForecast={currentForecast?.shortForecast ?? null}
-            precipProbability={currentForecast?.precipProbability ?? null}
-            uvIndex={currentForecast?.uvIndex ?? null}
-            precipInPerHr={currentForecast?.precipInPerHr ?? null}
-            waterTempF={current?.waterTempF ?? null}
-            tideCurrentFt={current?.tideCurrentFt ?? null}
-            nextHilos={data?.nextHilos ?? null}
-            airTempF={current?.airTempF ?? null}
-            sunriseTs={sunriseTs}
-            sunsetTs={sunsetTs}
-            godMode={godMode}
-            onTripleTap={() => setGodMode(g => !g)}
-          />
+          <SmartBanner scores={scores} forecast={data?.forecast ?? []} />
         )}
 
-        {/* Best side banner */}
-        {scores && (() => {
-          const gap = Math.abs(scores.north.score - scores.south.score);
-          const maxScore = Math.max(scores.north.score, scores.south.score);
-          if (maxScore === 0) return (
-            <div className="card px-4 py-2.5 flex items-center gap-2"
-              style={{ background: 'rgba(255, 43, 85, 0.06)', borderColor: 'rgba(255, 43, 85, 0.2)' }}>
-              <span style={{ color: '#ff2b55', fontSize: 16 }}>✕</span>
-              <span className="text-sm font-semibold" style={{ color: '#e2eef7' }}>Both sides rough — not a paddling day</span>
-            </div>
-          );
-          if (gap === 0) return null;
-          return (
-            <div className="card px-4 py-2.5 flex items-center gap-2"
-              style={{ background: 'rgba(0, 232, 135, 0.06)', borderColor: 'rgba(0, 232, 135, 0.2)' }}>
-              <span style={{ color: '#00e887', fontSize: 16 }}>▶</span>
-              <span className="text-sm font-semibold" style={{ color: '#e2eef7' }}>
-                {bestSide === 'north' ? 'North Side' : 'South Side'} is better right now
-              </span>
-              <span className="ml-auto text-xs" style={{ color: '#5a7fa0' }}>{gap} pt gap</span>
-            </div>
-          );
-        })()}
-
-        {/* Conditions bar */}
-        <ConditionsBar
-          current={current}
-          nextHilos={data?.nextHilos}
-          uvIndex={currentForecast?.uvIndex ?? null}
-          precipInPerHr={currentForecast?.precipInPerHr ?? null}
-          precipProbability={currentForecast?.precipProbability ?? null}
-          sunriseTs={sunriseTs}
-          sunsetTs={sunsetTs}
-          forecast={data?.forecast ?? []}
-        />
+        {/* Sprite + ConditionsBar fused — no gap between them (D8) */}
+        {scores && (
+          <div className="flex flex-col" style={{ gap: 0 }}>
+            <ConditionsSprite
+              score={Math.max(scores.north.score, scores.south.score)}
+              windSpeedKt={current?.windSpeedKt}
+              windDirDeg={windDirDeg}
+              windDirLabel={current?.windDirLabel ?? null}
+              windGustKt={current?.windGustKt ?? currentForecast?.windGustKt ?? null}
+              skyCover={currentForecast?.skyCover ?? null}
+              shortForecast={currentForecast?.shortForecast ?? null}
+              precipProbability={currentForecast?.precipProbability ?? null}
+              uvIndex={currentForecast?.uvIndex ?? null}
+              precipInPerHr={currentForecast?.precipInPerHr ?? null}
+              waterTempF={current?.waterTempF ?? null}
+              tideCurrentFt={current?.tideCurrentFt ?? null}
+              nextHilos={data?.nextHilos ?? null}
+              airTempF={current?.airTempF ?? null}
+              sunriseTs={sunriseTs}
+              sunsetTs={sunsetTs}
+              godMode={godMode}
+              onTripleTap={() => setGodMode(g => !g)}
+            />
+            <ConditionsBar
+              current={current}
+              nextHilos={data?.nextHilos}
+              uvIndex={currentForecast?.uvIndex ?? null}
+              precipInPerHr={currentForecast?.precipInPerHr ?? null}
+              precipProbability={currentForecast?.precipProbability ?? null}
+              sunriseTs={sunriseTs}
+              sunsetTs={sunsetTs}
+              forecast={data?.forecast ?? []}
+              scores={scores}
+              skyCover={currentForecast?.skyCover ?? null}
+              shortForecast={currentForecast?.shortForecast ?? null}
+            />
+          </div>
+        )}
 
         {/* Side cards */}
         {scores && (
@@ -273,6 +353,17 @@ export default function App() {
         {/* Model explainer */}
         {scores && <ModelExplainer />}
 
+        {/* "Looking ahead" section divider */}
+        {data?.forecast?.length > 0 && (
+          <div className="flex items-center gap-3 px-1">
+            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+            <span className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: '#3a5a70' }}>
+              Looking ahead
+            </span>
+            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+          </div>
+        )}
+
         {/* 3-day outlook + best windows */}
         {data?.forecast?.length > 0 && (
           <WeatherDays forecast={data.forecast} bestWindows={data.bestWindows} sunTimes={data.sunTimes ?? []} />
@@ -281,13 +372,11 @@ export default function App() {
         {/* Webcam visual check */}
         <WebcamPanel />
 
-        {/* Forecast strip — now accessible via the WIND/AIR pill panels */}
+        {/* Report conditions — moved above history */}
+        <ReportButton />
 
         {/* Glass history timeline */}
         <ConditionsHistory />
-
-        {/* Report button */}
-        <ReportButton />
 
         {/* Model calibration */}
         <InsightsPanel />
@@ -303,12 +392,10 @@ export default function App() {
           </div>
         )}
 
-        {/* Model disclaimer */}
         <p className="text-[10px] text-center px-4" style={{ color: '#2a4a60' }}>
           Glass score uses SMB wave model + Alki fetch geometry. Buoy at West Point (~1.5mi N). Validate before paddling.
         </p>
       </div>
-
     </>
   );
 }

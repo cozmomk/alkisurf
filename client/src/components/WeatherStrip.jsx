@@ -48,9 +48,9 @@ export default function WeatherStrip({ forecast }) {
   const scrollRef = useRef(null);
   const now       = Date.now();
 
-  // Next 24 hours
+  // 2 h past + 48 h future
   const hours = useMemo(() =>
-    (forecast ?? []).filter(h => h.time >= now - 1800000 && h.time <= now + 24 * 3600000),
+    (forecast ?? []).filter(h => h.time >= now - 2 * 3600000 && h.time <= now + 48 * 3600000),
     [forecast, now]
   );
 
@@ -99,6 +99,7 @@ export default function WeatherStrip({ forecast }) {
   const hasPrecip = hours.some(h => (h.precipProbability ?? 0) >= 10);
 
   return (
+    <div className="scroll-fade" style={{ position: 'relative' }}>
     <div
       ref={scrollRef}
       style={{ overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', marginInline: -4 }}
@@ -193,7 +194,7 @@ export default function WeatherStrip({ forecast }) {
                   </text>
                   {h.precipInPerHr != null && h.precipInPerHr > 0 && (
                     <text x={x} y={CURVE_BOT + H_LABEL + H_PRECIP - 4} textAnchor="middle" dx={28}
-                      style={{ fontSize: 7.5, fill: '#3a6a88' }}>
+                      style={{ fontSize: 8, fill: '#3a6a88' }}>
                       {h.precipInPerHr < 0.01 ? '<.01"' : `${h.precipInPerHr.toFixed(2)}"`}
                     </text>
                   )}
@@ -203,6 +204,7 @@ export default function WeatherStrip({ forecast }) {
           );
         })}
       </svg>
+    </div>
     </div>
   );
 }

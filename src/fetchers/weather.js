@@ -27,6 +27,7 @@ export async function fetchWeatherForecast(fetchFn) {
     ts: new Date(p.startTime).getTime(),
     airTempF: p.temperature, // already in °F
     windSpeedKt: parseWindSpeed(p.windSpeed),
+    windGustKt: p.windGust ? parseWindSpeed(p.windGust) : null,  // null when NWS doesn't forecast gusts
     windDirDeg: compassToDeg(p.windDirection),
     shortForecast: p.shortForecast,
     skyCover: estimateSkyCover(p.shortForecast),

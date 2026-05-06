@@ -1047,7 +1047,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
       width={CW}
       height={CH}
       onClick={handleTap}
-      style={{ width: '100%', height: 'auto', borderRadius: 12, display: 'block', cursor: 'default' }}
+      style={{ width: '100%', height: 'auto', borderRadius: '12px 12px 0 0', display: 'block', cursor: 'default' }}
     />
   );
 }

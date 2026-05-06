@@ -1,20 +1,16 @@
-import { useMemo } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
 
-// ─── geometry ───────────────────────────────────────────────────────────────
-const W = 320;
-const H = 96;
-const PAD_X = 4;
-const PAD_TOP = 28;   // room for high-tide labels above the curve
-const PAD_BOT = 18;   // room for low-tide labels below the curve
-const INNER_H = H - PAD_TOP - PAD_BOT;
+const PX_PER_HR = 36;
+const H        = 108;
+const PAD_TOP  = 28;   // room for high-tide labels above the curve
+const PAD_BOT  = 30;   // time label row + lo-tide labels below
+const PAD_L    = 4;
+const PAD_R    = 20;
+const INNER_H  = H - PAD_TOP - PAD_BOT;
 
 function toY(ft, minFt, maxFt) {
   const frac = (ft - minFt) / (maxFt - minFt || 1);
-  return PAD_TOP + INNER_H * (1 - frac); // SVG y=0 at top
-}
-
-function toX(ts, minTs, maxTs) {
-  return PAD_X + (W - 2 * PAD_X) * (ts - minTs) / (maxTs - minTs || 1);
+  return PAD_TOP + INNER_H * (1 - frac);
 }
 
 function cosineInterp(t1, h1, t2, h2, t) {
@@ -22,8 +18,10 @@ function cosineInterp(t1, h1, t2, h2, t) {
   return h1 + (h2 - h1) * (1 - Math.cos(Math.PI * frac)) / 2;
 }
 
-function buildPath(hilos, minTs, maxTs, minFt, maxFt, steps = 160) {
+function buildPath(hilos, minTs, svgW, minFt, maxFt, steps = 240) {
+  const maxTs = minTs + svgW / PX_PER_HR * 3600000 - (PAD_L + PAD_R) / PX_PER_HR * 3600000;
   const pts = [];
+  function xOf(ts) { return PAD_L + (ts - minTs) / 3600000 * PX_PER_HR; }
   for (let i = 0; i <= steps; i++) {
     const t = minTs + (maxTs - minTs) * (i / steps);
     let h = hilos[0].ft;
@@ -34,7 +32,7 @@ function buildPath(hilos, minTs, maxTs, minFt, maxFt, steps = 160) {
       }
       if (t > hilos[hilos.length - 1].ts) h = hilos[hilos.length - 1].ft;
     }
-    pts.push({ x: toX(t, minTs, maxTs), y: toY(h, minFt, maxFt) });
+    pts.push({ x: xOf(t), y: toY(h, minFt, maxFt) });
   }
   return pts;
 }
@@ -46,62 +44,97 @@ function ptsToD(pts) {
 function fmtTime(ts) {
   return new Date(ts).toLocaleString('en-US', {
     timeZone: 'America/Los_Angeles',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
+    hour: 'numeric', minute: '2-digit', hour12: true,
   }).replace(':00', '').replace(' ', '');
 }
 
-// ─── demo data (matches screenshot feel, set "now" mid-rise) ────────────────
+function fmtDay(ts) {
+  return new Date(ts).toLocaleString('en-US', {
+    timeZone: 'America/Los_Angeles', weekday: 'short',
+  });
+}
+
+function fmtTick(ts, opts) {
+  return new Date(ts).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', ...opts });
+}
+
+// ─── demo data ────────────────────────────────────────────────────────────────
 function buildDemoHilos() {
   const base = new Date();
   base.setHours(0, 0, 0, 0);
   const h = (hr, min) => base.getTime() + (hr * 60 + min) * 60000;
   return [
-    { type: 'H', ft: 6.5, ts: h(5, 52) },
+    { type: 'H', ft: 6.5, ts: h(5,  52) },
     { type: 'L', ft: 0.4, ts: h(13, 36) },
     { type: 'H', ft: 5.4, ts: h(18, 37) },
     { type: 'L', ft: 1.1, ts: h(23, 50) },
+    { type: 'H', ft: 7.1, ts: h(29, 30) },
+    { type: 'L', ft: 0.8, ts: h(38, 10) },
   ];
 }
 
-// ─── main component ──────────────────────────────────────────────────────────
+// ─── main component ───────────────────────────────────────────────────────────
 export default function TideChart({ currentFt, tideDirection, nextHilos, demo = false }) {
+  const scrollRef = useRef(null);
   const now = demo
     ? (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime() + (14 * 60 + 5) * 60000; })()
     : Date.now();
 
-  // Build hilos array: anchor at "now" using currentFt, then nextHilos forward
+  const startTime = now - 2 * 3600000;
+  const endTime   = now + 48 * 3600000;
+  const svgW = Math.round(PAD_L + (endTime - startTime) / 3600000 * PX_PER_HR + PAD_R);
+  const nowX = PAD_L + (now - startTime) / 3600000 * PX_PER_HR;
+
+  function toX(ts) { return PAD_L + (ts - startTime) / 3600000 * PX_PER_HR; }
+
+  // Build hilos: anchor just before startTime, then all nextHilos through +48h
   const hilos = useMemo(() => {
     if (demo) return buildDemoHilos();
-    const upcoming = (nextHilos ?? []).filter(h => h.ts > now - 3600000);
+    const upcoming = (nextHilos ?? []).filter(h => h.ts > startTime);
     if (!upcoming.length) return [];
-    // Synthesize a current anchor so the curve starts from real current height
-    const anchor = { type: 'anchor', ft: currentFt ?? upcoming[0].ft, ts: now - 3600000 };
+    const anchor = { type: 'anchor', ft: currentFt ?? upcoming[0].ft, ts: startTime };
     return [anchor, ...upcoming.map(h => ({ type: h.type, ft: h.ft, ts: h.ts }))];
   }, [nextHilos, currentFt, now, demo]);
 
   const displayFt  = demo ? 2.3 : (currentFt ?? null);
   const displayDir = demo ? 'rising' : (tideDirection ?? null);
 
-  const { pathD, fillD, curDot, visHilos, minTs, maxTs, minFt, maxFt } = useMemo(() => {
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = Math.max(0, nowX - 30);
+    }
+  }, [nowX]);
+
+  const { pathD, fillD, curDot, visHilos, minFt, maxFt, timeTicks } = useMemo(() => {
     if (hilos.length < 2) return {};
 
-    // show window: 2 h before now → 8 h after now
-    const minTs = now - 2 * 3600000;
-    const maxTs = now + 8 * 3600000;
     const allFt = hilos.map(h => h.ft);
-    const minFt = Math.min(...allFt) - 0.3;
-    const maxFt = Math.max(...allFt) + 0.3;
+    const minFt = Math.min(...allFt) - 0.4;
+    const maxFt = Math.max(...allFt) + 0.4;
 
-    const pts = buildPath(hilos, minTs, maxTs, minFt, maxFt);
+    // Build curve over the full window using pixel-based step count
+    const steps = 300;
+    const pts = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = startTime + (endTime - startTime) * (i / steps);
+      let h = hilos[0].ft;
+      for (let j = 0; j < hilos.length - 1; j++) {
+        if (t >= hilos[j].ts && t <= hilos[j + 1].ts) {
+          h = cosineInterp(hilos[j].ts, hilos[j].ft, hilos[j + 1].ts, hilos[j + 1].ft, t);
+          break;
+        }
+        if (t > hilos[hilos.length - 1].ts) h = hilos[hilos.length - 1].ft;
+      }
+      pts.push({ x: toX(t), y: toY(h, minFt, maxFt) });
+    }
+
     const pathD = ptsToD(pts);
+    const botY  = toY(minFt, minFt, maxFt);
+    const fillD = pathD
+      + ` L${pts[pts.length - 1].x.toFixed(1)},${botY.toFixed(1)}`
+      + ` L${pts[0].x.toFixed(1)},${botY.toFixed(1)} Z`;
 
-    // fill path (close to bottom)
-    const botY = toY(minFt, minFt, maxFt);
-    const fillD = pathD + ` L${pts[pts.length - 1].x.toFixed(1)},${botY.toFixed(1)} L${pts[0].x.toFixed(1)},${botY.toFixed(1)} Z`;
-
-    // current dot position — interpolate height from hilos
+    // Current dot
     let curH = hilos[0].ft;
     for (let j = 0; j < hilos.length - 1; j++) {
       if (now >= hilos[j].ts && now <= hilos[j + 1].ts) {
@@ -110,20 +143,39 @@ export default function TideChart({ currentFt, tideDirection, nextHilos, demo = 
       }
     }
     const curDot = {
-      x: toX(now, minTs, maxTs),
+      x: toX(now),
       y: toY(curH, minFt, maxFt),
       ft: displayFt ?? curH,
     };
 
-    // which hilos fall in the visible window
-    const visHilos = hilos.filter(h => h.ts >= minTs && h.ts <= maxTs);
+    // Hilos in visible window (exclude anchor)
+    const visHilos = hilos.filter(h => h.type !== 'anchor' && h.ts >= startTime && h.ts <= endTime);
 
-    return { pathD, fillD, curDot, visHilos, minTs, maxTs, minFt, maxFt };
+    // 2-hour time ticks across the window (aligned to Pacific even hours)
+    const roundedStart = Math.floor(startTime / 3600000) * 3600000;
+    const timeTicks = [];
+    for (let ts = roundedStart; ts <= endTime + 3600000; ts += 3600000) {
+      const hr = parseInt(fmtTick(ts, { hour: 'numeric', hour12: false })) % 24;
+      if (hr % 2 === 0) {
+        const isMidnight = hr === 0;
+        timeTicks.push({
+          x: toX(ts),
+          label: isMidnight
+            ? fmtTick(ts, { weekday: 'short' })
+            : fmtTick(ts, { hour: 'numeric', hour12: true }),
+          isMidnight,
+          ts,
+        });
+      }
+    }
+
+    return { pathD, fillD, curDot, visHilos, minFt, maxFt, timeTicks };
   }, [hilos, now, displayFt]);
 
   if (!pathD) return null;
 
-  const arrowIcon = displayDir === 'rising' ? '↑' : displayDir === 'falling' ? '↓' : '→';
+  const botY = toY(minFt, minFt, maxFt);
+  const arrowIcon  = displayDir === 'rising' ? '↑' : displayDir === 'falling' ? '↓' : '→';
   const arrowColor = displayDir === 'rising' ? '#4fc3f7' : displayDir === 'falling' ? '#ff8a65' : '#90a4ae';
 
   return (
@@ -138,60 +190,84 @@ export default function TideChart({ currentFt, tideDirection, nextHilos, demo = 
         </span>
       </div>
 
-      {/* SVG chart */}
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
-        <defs>
-          <linearGradient id="tide-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#4fc3f7" stopOpacity="0.22" />
-            <stop offset="100%" stopColor="#4fc3f7" stopOpacity="0.04" />
-          </linearGradient>
-          <clipPath id="tide-clip">
-            <rect x={PAD_X} y={0} width={W - 2 * PAD_X} height={H} />
-          </clipPath>
-        </defs>
+      <div className="scroll-fade" style={{ position: 'relative' }}>
+      <div
+        ref={scrollRef}
+        style={{ overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', marginInline: -4 }}
+      >
+        <svg width={svgW} height={H} viewBox={`0 0 ${svgW} ${H}`} style={{ display: 'block' }}>
+          <defs>
+            <linearGradient id="tide-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#4fc3f7" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="#4fc3f7" stopOpacity="0.04" />
+            </linearGradient>
+            <clipPath id="tide-clip">
+              <rect x={PAD_L} y={0} width={svgW - PAD_L - PAD_R} height={H} />
+            </clipPath>
+          </defs>
 
-        {/* Fill */}
-        <path d={fillD} fill="url(#tide-fill)" clipPath="url(#tide-clip)" />
+          {/* Fill */}
+          <path d={fillD} fill="url(#tide-fill)" clipPath="url(#tide-clip)" />
 
-        {/* Curve line */}
-        <path d={pathD} fill="none" stroke="#4fc3f7" strokeWidth="2.5"
-          strokeLinecap="round" clipPath="url(#tide-clip)" />
+          {/* Curve */}
+          <path d={pathD} fill="none" stroke="#4fc3f7" strokeWidth="2.5"
+            strokeLinecap="round" clipPath="url(#tide-clip)" />
 
-        {/* Hi/Lo labels */}
-        {visHilos.map((hilo, i) => {
-          const x = toX(hilo.ts, minTs, maxTs);
-          const y = toY(hilo.ft, minFt, maxFt);
-          const isHigh = hilo.type === 'H';
-          const labelY = isHigh ? y - 14 : y + 22;
-          const ftY    = isHigh ? y - 4  : y + 32;
-          return (
-            <g key={i}>
-              {/* dot on curve */}
-              <circle cx={x} cy={y} r={3.5} fill="#1a3a50" stroke="#4fc3f7" strokeWidth="1.5" />
-              {/* time */}
-              <text x={x} y={labelY} textAnchor="middle"
-                style={{ fontSize: 9, fill: '#7a9ab8', fontWeight: 500 }}>
-                {fmtTime(hilo.ts)}
-              </text>
-              {/* height */}
-              <text x={x} y={ftY} textAnchor="middle"
-                style={{ fontSize: 10, fill: '#c8dff0', fontWeight: 700 }}>
-                {hilo.ft.toFixed(1)}'
-              </text>
+          {/* NOW line */}
+          <line x1={nowX} y1={0} x2={nowX} y2={botY}
+            stroke="#00e887" strokeWidth="1.5" strokeOpacity="0.5" strokeDasharray="3,3" />
+
+          {/* Midnight dividers */}
+          {(timeTicks ?? []).filter(t => t.isMidnight).map(t => (
+            <line key={t.ts} x1={t.x} y1={PAD_TOP} x2={t.x} y2={botY}
+              stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+          ))}
+
+          {/* Time tick labels — bottom row */}
+          {(timeTicks ?? []).map(({ x, label, isMidnight, ts }) => (
+            <text key={ts} x={x} y={H - 3} textAnchor="middle"
+              style={{
+                fontSize: isMidnight ? 8.5 : 8,
+                fill: isMidnight ? '#5a7fa0' : '#3a5a70',
+                fontWeight: isMidnight ? 700 : 400,
+              }}>
+              {label}
+            </text>
+          ))}
+
+          {/* Hi/Lo labels */}
+          {visHilos.map((hilo, i) => {
+            const x = toX(hilo.ts);
+            const y = toY(hilo.ft, minFt, maxFt);
+            const isHigh = hilo.type === 'H';
+            const labelY = isHigh ? y - 14 : y + 22;
+            const ftY    = isHigh ? y - 4  : y + 32;
+            return (
+              <g key={i}>
+                <circle cx={x} cy={y} r={3.5} fill="#1a3a50" stroke="#4fc3f7" strokeWidth="1.5" />
+                <text x={x} y={labelY} textAnchor="middle"
+                  style={{ fontSize: 9, fill: '#7a9ab8', fontWeight: 500 }}>
+                  {fmtTime(hilo.ts)}
+                </text>
+                <text x={x} y={ftY} textAnchor="middle"
+                  style={{ fontSize: 10, fill: '#c8dff0', fontWeight: 700 }}>
+                  {hilo.ft.toFixed(1)}'
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Current dot */}
+          {curDot && (
+            <g>
+              <circle cx={curDot.x} cy={curDot.y} r={8} fill="#4fc3f7" fillOpacity="0.15" />
+              <circle cx={curDot.x} cy={curDot.y} r={5} fill="#4fc3f7" />
+              <circle cx={curDot.x} cy={curDot.y} r={2.5} fill="white" />
             </g>
-          );
-        })}
-
-        {/* Current position dot */}
-        {curDot && (
-          <g>
-            {/* glow ring */}
-            <circle cx={curDot.x} cy={curDot.y} r={8} fill="#4fc3f7" fillOpacity="0.15" />
-            <circle cx={curDot.x} cy={curDot.y} r={5} fill="#4fc3f7" />
-            <circle cx={curDot.x} cy={curDot.y} r={2.5} fill="white" />
-          </g>
-        )}
-      </svg>
+          )}
+        </svg>
+      </div>
+      </div>
     </div>
   );
 }

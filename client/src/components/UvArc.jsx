@@ -1,14 +1,19 @@
 import { useMemo } from 'react';
 import { uvColor, uvLabel } from '../utils.js';
 
-const W = 320;
-const H = 90;
-const CX = W / 2;
-const CY = H + 10; // center below the arc so it's a top-half arc
-const R  = H + 5;
+// Arc geometry — all labels fit within viewBox, no overflow:visible needed.
+//   viewBox: 0 0 320 110
+//   Arc peak (noon) → y = CY - R = 24
+//   Arc endpoints   → y = CY = 96
+//   Time labels     → y = CY + 12 = 108
+const W     = 320;
+const H_SVG = 110;
+const CX    = W / 2;   // 160
+const CY    = 96;      // arc endpoint y
+const R     = 72;      // arc radius — peak at y=24
 
 function arcPoint(frac) {
-  const angle = Math.PI + frac * Math.PI; // π to 2π (left to right)
+  const angle = Math.PI + frac * Math.PI; // π→2π (left=sunrise → top=noon → right=sunset)
   return {
     x: CX + R * Math.cos(angle),
     y: CY + R * Math.sin(angle),
@@ -18,128 +23,187 @@ function arcPoint(frac) {
 function fmt(ts) {
   return new Date(ts).toLocaleString('en-US', {
     timeZone: 'America/Los_Angeles',
-    hour: 'numeric', hour12: true,
+    hour: 'numeric', minute: '2-digit', hour12: true,
   });
+}
+
+function burnMinutes(uv) {
+  if (!uv || uv <= 0) return null;
+  const eff = uv * 1.5;
+  if (eff <= 2)  return '>60';
+  if (eff <= 4)  return '~35';
+  if (eff <= 6)  return '~20';
+  if (eff <= 8)  return '~12';
+  if (eff <= 10) return '~8';
+  return '<5';
+}
+
+function sunscreenTip(uv) {
+  if (!uv) return null;
+  if (uv <= 2)  return 'Low risk · hat recommended';
+  if (uv <= 5)  return 'SPF 30+ · reapply every hour';
+  if (uv <= 7)  return 'SPF 50+ · reapply every 45 min';
+  if (uv <= 10) return 'SPF 50+ · reapply every 30 min';
+  return 'Extreme · limit time on water';
 }
 
 export default function UvArc({ forecast, sunriseTs, sunsetTs }) {
   const now = Date.now();
 
-  const { arcPath, uvPoints, nowPt, peakPt, currentUv } = useMemo(() => {
-    if (!sunriseTs || !sunsetTs || !forecast?.length) return {};
+  const derived = useMemo(() => {
+    if (!sunriseTs || !sunsetTs || !forecast?.length) return null;
     const span = sunsetTs - sunriseTs;
 
-    // arc path: sunrise to sunset
-    const steps = 60;
-    const arcPts = Array.from({ length: steps + 1 }, (_, i) => arcPoint(i / steps));
+    // Arc track path
+    const steps   = 60;
+    const arcPts  = Array.from({ length: steps + 1 }, (_, i) => arcPoint(i / steps));
     const arcPath = arcPts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
 
-    // forecast hours within daylight window
+    // Forecast hours within daylight with UV data
     const dayHours = forecast.filter(h => h.time >= sunriseTs && h.time <= sunsetTs && h.uvIndex != null);
 
     const uvPoints = dayHours.map(h => {
       const frac = (h.time - sunriseTs) / span;
-      const pt = arcPoint(frac);
-      const uv = Math.round(h.uvIndex);
-      return { ...pt, uv, frac, ts: h.time };
+      return { ...arcPoint(frac), uv: Math.round(h.uvIndex), frac, ts: h.time };
     });
 
-    // current UV
-    const closest = forecast.reduce((best, h) =>
-      Math.abs(h.time - now) < Math.abs(best.time - now) ? h : best
-    , forecast[0]);
+    // Current UV (nearest forecast hour to now)
+    const closest   = forecast.reduce((b, h) => Math.abs(h.time - now) < Math.abs(b.time - now) ? h : b, forecast[0]);
     const currentUv = closest?.uvIndex != null ? Math.round(closest.uvIndex) : null;
 
-    // now position on arc
+    // NOW position on arc
     let nowPt = null;
     if (now >= sunriseTs && now <= sunsetTs) {
       const frac = (now - sunriseTs) / span;
       nowPt = { ...arcPoint(frac), frac };
     }
 
-    // peak
-    const peakHour = dayHours.reduce((best, h) => (h.uvIndex > (best?.uvIndex ?? -1) ? h : best), null);
+    // Peak UV today
+    const peakHour = dayHours.reduce((b, h) => (h.uvIndex > (b?.uvIndex ?? -1) ? h : b), null);
     let peakPt = null;
     if (peakHour) {
       const frac = (peakHour.time - sunriseTs) / span;
-      peakPt = { ...arcPoint(frac), uv: Math.round(peakHour.uvIndex), ts: peakHour.time };
+      peakPt = { ...arcPoint(frac), uv: Math.round(peakHour.uvIndex), ts: peakHour.time, frac };
     }
 
     return { arcPath, uvPoints, nowPt, peakPt, currentUv };
   }, [forecast, sunriseTs, sunsetTs, now]);
 
-  if (!arcPath) return (
-    <div className="flex items-center justify-center" style={{ height: H }}>
+  if (!derived) return (
+    <div className="flex items-center justify-center" style={{ height: 80 }}>
       <span style={{ fontSize: 11, color: '#3a5a70' }}>UV data unavailable</span>
     </div>
   );
 
+  const { arcPath, uvPoints, nowPt, peakPt, currentUv } = derived;
+
   const srPt = arcPoint(0);
   const ssPt = arcPoint(1);
 
-  return (
-    <div className="flex flex-col gap-1">
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
-        {/* Background arc */}
-        <path d={arcPath} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="4" />
+  const burn   = burnMinutes(currentUv);
+  const tip    = sunscreenTip(currentUv);
 
-        {/* Colored arc segments */}
+  return (
+    <div className="flex flex-col" style={{ gap: 8 }}>
+
+      {/* ── Arc ── */}
+      <svg width="100%" viewBox={`0 0 ${W} ${H_SVG}`} style={{ display: 'block' }}>
+
+        {/* Background track */}
+        <path d={arcPath} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="6" />
+
+        {/* Colored UV segments */}
         {uvPoints.length > 1 && uvPoints.map((pt, i) => {
           if (i === 0) return null;
-          const prev = uvPoints[i - 1];
+          const prev  = uvPoints[i - 1];
           const avgUv = (pt.uv + prev.uv) / 2;
           return (
             <line key={i}
               x1={prev.x.toFixed(1)} y1={prev.y.toFixed(1)}
-              x2={pt.x.toFixed(1)} y2={pt.y.toFixed(1)}
-              stroke={uvColor(avgUv)} strokeWidth="4" strokeLinecap="round" opacity="0.85"
+              x2={pt.x.toFixed(1)}  y2={pt.y.toFixed(1)}
+              stroke={uvColor(avgUv)} strokeWidth="6" strokeLinecap="round" opacity="0.9"
             />
           );
         })}
 
-        {/* Sunrise label */}
-        <text x={srPt.x} y={srPt.y + 12} textAnchor="middle"
-          style={{ fontSize: 8, fill: '#3a5a70' }}>
-          🌅 {fmt(sunriseTs)}
-        </text>
-
-        {/* Sunset label */}
-        <text x={ssPt.x} y={ssPt.y + 12} textAnchor="middle"
-          style={{ fontSize: 8, fill: '#3a5a70' }}>
-          🌇 {fmt(sunsetTs)}
-        </text>
-
-        {/* Peak UV label */}
-        {peakPt && (
-          <g>
-            <circle cx={peakPt.x} cy={peakPt.y} r={5} fill={uvColor(peakPt.uv)} />
-            <text x={peakPt.x} y={peakPt.y - 10} textAnchor="middle"
-              style={{ fontSize: 9, fill: uvColor(peakPt.uv), fontWeight: 700 }}>
-              Peak {peakPt.uv}
-            </text>
-          </g>
-        )}
-
-        {/* Now marker */}
+        {/* NOW marker — dot only, no floating label */}
         {nowPt && (
           <g>
-            <circle cx={nowPt.x} cy={nowPt.y} r={7} fill={uvColor(currentUv ?? 0)} fillOpacity="0.2" />
-            <circle cx={nowPt.x} cy={nowPt.y} r={4} fill={uvColor(currentUv ?? 0)} />
-            <circle cx={nowPt.x} cy={nowPt.y} r={1.5} fill="white" />
+            <circle cx={nowPt.x} cy={nowPt.y} r={10} fill={uvColor(currentUv ?? 0)} fillOpacity="0.18" />
+            <circle cx={nowPt.x} cy={nowPt.y} r={5.5} fill={uvColor(currentUv ?? 0)} />
+            <circle cx={nowPt.x} cy={nowPt.y} r={2.2} fill="white" />
           </g>
         )}
+
+        {/* Sunrise / sunset — plain time text, no emoji */}
+        <text x={Math.max(4, srPt.x)} y={CY + 12} textAnchor="start"
+          style={{ fontSize: 9, fill: '#3a5a70' }}>
+          {fmt(sunriseTs)}
+        </text>
+        <text x={Math.min(W - 4, ssPt.x)} y={CY + 12} textAnchor="end"
+          style={{ fontSize: 9, fill: '#3a5a70' }}>
+          {fmt(sunsetTs)}
+        </text>
+
       </svg>
 
-      {/* Current UV readout */}
-      {currentUv != null && (
-        <div className="flex items-center justify-center gap-1.5">
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: uvColor(currentUv) }} />
-          <span style={{ fontSize: 11, color: uvColor(currentUv), fontWeight: 700 }}>
-            UV {currentUv} · {uvLabel(currentUv)}
-          </span>
-          <span style={{ fontSize: 10, color: '#3a5a70' }}>now</span>
+      {/* ── Info strip: Now · Peak · Burns ── */}
+      <div className="flex items-start px-2" style={{ gap: 0 }}>
+
+        {/* NOW */}
+        <div className="flex-1 flex flex-col items-center">
+          <span style={{ fontSize: 8, color: '#5a7fa0', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Now</span>
+          {currentUv != null ? (
+            <>
+              <span style={{ fontSize: 22, fontWeight: 900, color: uvColor(currentUv), lineHeight: 1.1 }}>{currentUv}</span>
+              <span style={{ fontSize: 9, color: uvColor(currentUv), fontWeight: 600 }}>{uvLabel(currentUv)}</span>
+            </>
+          ) : (
+            <span style={{ fontSize: 16, color: '#3a5a70' }}>—</span>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, height: 44, background: 'rgba(255,255,255,0.08)', alignSelf: 'center' }} />
+
+        {/* PEAK */}
+        <div className="flex-1 flex flex-col items-center">
+          <span style={{ fontSize: 8, color: '#5a7fa0', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Peak</span>
+          {peakPt ? (
+            <>
+              <span style={{ fontSize: 22, fontWeight: 900, color: uvColor(peakPt.uv), lineHeight: 1.1 }}>{peakPt.uv}</span>
+              <span style={{ fontSize: 9, color: '#5a7fa0' }}>{fmt(peakPt.ts)}</span>
+            </>
+          ) : (
+            <span style={{ fontSize: 16, color: '#3a5a70' }}>—</span>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, height: 44, background: 'rgba(255,255,255,0.08)', alignSelf: 'center' }} />
+
+        {/* BURNS */}
+        <div className="flex-1 flex flex-col items-center">
+          <span style={{ fontSize: 8, color: '#5a7fa0', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Burns</span>
+          {burn != null ? (
+            <>
+              <span style={{ fontSize: 22, fontWeight: 900, color: uvColor((currentUv ?? 0) * 1.5), lineHeight: 1.1 }}>{burn}</span>
+              <span style={{ fontSize: 9, color: '#5a7fa0' }}>min on water</span>
+            </>
+          ) : (
+            <span style={{ fontSize: 16, color: '#3a5a70' }}>—</span>
+          )}
+        </div>
+
+      </div>
+
+      {/* ── Sunscreen tip ── */}
+      {tip && (
+        <div style={{ fontSize: 9, color: '#3a5a70', textAlign: 'center', paddingBottom: 2 }}>
+          {tip}
         </div>
       )}
+
     </div>
   );
 }

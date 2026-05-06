@@ -11,6 +11,19 @@ export function skyEmoji(skyCover, ts) {
   return '☁️';
 }
 
+// Like skyEmoji but fog/smoke/haze from NWS shortForecast text takes priority
+export function conditionsEmoji(skyCover, shortForecast, ts) {
+  if (shortForecast) {
+    const lc = shortForecast.toLowerCase();
+    if (lc.includes('fog') || lc.includes('mist'))  return '🌫️';
+    if (lc.includes('smoke') || lc.includes('haze')) return '🌫️';
+    if (lc.includes('snow') || lc.includes('blizzard')) return '❄️';
+    if (lc.includes('thunder') || lc.includes('tstm')) return '⛈️';
+    if (lc.includes('rain') || lc.includes('shower') || lc.includes('drizzle')) return '🌧️';
+  }
+  return skyEmoji(skyCover, ts);
+}
+
 export function uvColor(uv) {
   if (uv == null) return '#3a5a70';
   if (uv <= 2) return '#4ade80';

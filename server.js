@@ -340,12 +340,14 @@ async function buildConditions() {
         windSpeedKt: h.windSpeedKt,
         windDirDeg: h.windDirDeg,
         windDirLabel: compassLabel(h.windDirDeg),
-        skyCover: h.skyCover,
+        // Use Open-Meteo cloud_cover when available — same model as uvIndex, so they're consistent.
+        // Fall back to NWS-derived skyCover for emoji/label purposes only.
+        skyCover: nearestUV?.cloudCoverPct ?? h.skyCover,
         shortForecast: h.shortForecast,
         precipProbability: h.precipProbability ?? null,
         uvIndex: nearestUV?.uvIndex ?? null,
         precipInPerHr: nearestUV?.precipMmHr != null ? nearestUV.precipMmHr / 25.4 : null,
-        windGustKt: h.windGustKt ?? null,
+        windGustKt: nearestUV?.windGustKt ?? h.windGustKt ?? null,
         waveHeightFt: nearestMarine?.waveHeightM != null ? nearestMarine.waveHeightM * 3.281 : null,
         sides,
         actual,

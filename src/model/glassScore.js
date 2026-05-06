@@ -118,6 +118,8 @@ export function computeGlassScore({ windSpeedKt, windGustKt, windDirDeg, side, w
     fetch,
     waveState,
     windDurHrs: Math.round(durationSeconds / 3600),
+    windFactor: Math.round(windFactor * 100) / 100,  // 0.00–1.00
+    waveFactor: Math.round(waveFactor * 100) / 100,  // 0.00–1.00
   };
 }
 

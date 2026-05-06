@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { compassLabel, uvColor, uvLabel } from '../utils.js';
+import { compassLabel, uvColor, uvLabel, conditionsEmoji, scoreColor } from '../utils.js';
 import TideChart from './TideChart.jsx';
 import WeatherStrip from './WeatherStrip.jsx';
 import WindChart from './WindChart.jsx';
 import UvArc from './UvArc.jsx';
+import ScoreChart from './ScoreChart.jsx';
 
 // ─── sub-components ──────────────────────────────────────────────────────────
 
@@ -17,21 +18,9 @@ function TideArrow({ direction }) {
   );
 }
 
-function formatSunTime(ts) {
-  return new Date(ts).toLocaleTimeString('en-US', {
-    timeZone: 'America/Los_Angeles',
-    hour: 'numeric', minute: '2-digit', hour12: true,
-  });
-}
-
-function daylightStr(sunriseTs, sunsetTs) {
-  const mins = Math.round((sunsetTs - sunriseTs) / 60000);
-  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
-}
-
 // ─── Pill ─────────────────────────────────────────────────────────────────────
 
-function Pill({ label, value, tappable, active, onClick }) {
+function Pill({ label, value, detail, tappable, active, onClick }) {
   return (
     <button
       onClick={tappable ? onClick : undefined}
@@ -58,6 +47,11 @@ function Pill({ label, value, tappable, active, onClick }) {
         <span className="text-sm font-semibold" style={{ color: active ? '#e2eef7' : '#c8dff0' }}>
           {value ?? '—'}
         </span>
+        {detail && (
+          <span style={{ fontSize: 8, color: '#3a5a70', lineHeight: 1.2, marginTop: 1 }}>
+            {detail}
+          </span>
+        )}
       </div>
     </button>
   );
@@ -81,13 +75,65 @@ function Panel({ open, children }) {
   );
 }
 
+// ─── Glass score breakdown panel ─────────────────────────────────────────────
+
+function GlassPanel({ scores }) {
+  if (!scores) return (
+    <div style={{ padding: '8px 4px', color: '#3a5a70', fontSize: 11, textAlign: 'center' }}>
+      No score data
+    </div>
+  );
+
+  return (
+    <div className="flex gap-3 px-1">
+      {['north', 'south'].map(side => {
+        const d = scores[side];
+        if (!d) return null;
+        const windPct  = d.windFactor  != null ? Math.round(d.windFactor * 100)  : null;
+        const wavePct  = d.waveFactor  != null ? Math.round(d.waveFactor * 100)  : null;
+        const label    = side === 'north' ? 'North' : 'South';
+        return (
+          <div key={side} className="flex-1 rounded-lg px-3 py-2"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: '#5a7fa0' }}>{label}</span>
+              <span className="text-base font-black" style={{ color: scoreColor(d.score) }}>{d.score}</span>
+            </div>
+            <div className="flex flex-col gap-1">
+              {windPct != null && (
+                <div className="flex items-center gap-1.5">
+                  <span style={{ fontSize: 10, color: '#3a5a70', width: 28 }}>Wind</span>
+                  <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ width: `${windPct}%`, height: '100%', background: '#4fc3f7', borderRadius: 2 }} />
+                  </div>
+                  <span style={{ fontSize: 10, color: '#7ab8e8', width: 28, textAlign: 'right' }}>{windPct}%</span>
+                </div>
+              )}
+              {wavePct != null && (
+                <div className="flex items-center gap-1.5">
+                  <span style={{ fontSize: 10, color: '#3a5a70', width: 28 }}>Wave</span>
+                  <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ width: `${wavePct}%`, height: '100%', background: '#f59e0b', borderRadius: 2 }} />
+                  </div>
+                  <span style={{ fontSize: 10, color: '#f59e0b', width: 28, textAlign: 'right' }}>{wavePct}%</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── main component ──────────────────────────────────────────────────────────
 
 export default function ConditionsBar({
   current, nextHilos, uvIndex, precipInPerHr, precipProbability,
-  sunriseTs, sunsetTs, forecast,
+  sunriseTs, sunsetTs, forecast, scores,
+  skyCover, shortForecast,
 }) {
-  const [activePanel, setActivePanel] = useState(null);
+  const [activePanel, setActivePanel] = useState('glass');
 
   const toggle = (panel) => setActivePanel(p => p === panel ? null : panel);
 
@@ -117,25 +163,41 @@ export default function ConditionsBar({
 
   const uv = uvIndex != null ? Math.round(uvIndex) : null;
 
+  // Glass pill — best side score
+  const bestScore = scores
+    ? Math.max(scores.north?.score ?? 0, scores.south?.score ?? 0)
+    : null;
+
+  // Conditions pill — weather icon + temp
+  const wxEmoji = conditionsEmoji(skyCover, shortForecast, Date.now());
+  const condStr = current.airTempF != null
+    ? `${wxEmoji ?? '—'} ${Math.round(current.airTempF)}°`
+    : (wxEmoji ?? '—');
+
   const sep = <div className="w-px" style={{ height: 36, background: 'rgba(255,255,255,0.07)', flexShrink: 0 }} />;
 
   return (
-    <div className="card px-2 py-3">
+    <div className="card px-2 py-3" style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
 
       {/* Pills row */}
       <div className="flex items-center justify-around">
 
         <Pill
-          label="Water"
-          value={current.waterTempF != null ? `${Math.round(current.waterTempF)}°F` : '—'}
+          label="Glass"
+          tappable
+          active={activePanel === 'glass'}
+          onClick={() => toggle('glass')}
+          value={bestScore != null
+            ? <span style={{ color: scoreColor(bestScore) }}>{bestScore}/10</span>
+            : '—'}
         />
         {sep}
         <Pill
-          label="Air"
+          label="Conditions"
           tappable
           active={activePanel === 'air'}
           onClick={() => toggle('air')}
-          value={current.airTempF != null ? `${Math.round(current.airTempF)}°F` : '—'}
+          value={condStr}
         />
         {sep}
         {uv != null && (
@@ -168,51 +230,17 @@ export default function ConditionsBar({
               {tideStr} <TideArrow direction={current.tideDirection} />
             </span>
           }
+          detail={nextTideStr ?? undefined}
         />
       </div>
 
-      {/* Tide sub-label */}
-      {nextTideStr && activePanel !== 'tide' && (
-        <div className="text-center mt-0.5">
-          <span className="text-[10px]" style={{ color: '#3a5a70' }}>{nextTideStr}</span>
-        </div>
-      )}
-
-      {/* Sunrise / Sunset row */}
-      {(sunriseTs || sunsetTs) && (
-        <>
-          <div style={{ width: '100%', height: 1, background: 'rgba(255,255,255,0.06)', marginTop: 8 }} />
-          <div className="flex items-center justify-center gap-5 w-full pt-2">
-            {sunriseTs && (
-              <div className="flex items-center gap-1.5">
-                <span style={{ fontSize: 13 }}>🌅</span>
-                <div className="flex flex-col">
-                  <span className="text-[9px] font-medium tracking-widest uppercase" style={{ color: '#5a7fa0' }}>Sunrise</span>
-                  <span className="text-[11px] font-semibold" style={{ color: '#e2eef7' }}>{formatSunTime(sunriseTs)}</span>
-                </div>
-              </div>
-            )}
-            {sunriseTs && sunsetTs && (
-              <div className="flex flex-col items-center">
-                <span className="text-[9px] font-medium tracking-widest uppercase" style={{ color: '#3a5a70' }}>Daylight</span>
-                <span className="text-[11px] font-semibold" style={{ color: '#5a7fa0' }}>{daylightStr(sunriseTs, sunsetTs)}</span>
-              </div>
-            )}
-            {sunsetTs && (
-              <div className="flex items-center gap-1.5">
-                <span style={{ fontSize: 13 }}>🌇</span>
-                <div className="flex flex-col">
-                  <span className="text-[9px] font-medium tracking-widest uppercase" style={{ color: '#5a7fa0' }}>Sunset</span>
-                  <span className="text-[11px] font-semibold" style={{ color: '#e2eef7' }}>{formatSunTime(sunsetTs)}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
       {/* ── Panels ── */}
       <div style={{ paddingInline: 4 }}>
+
+        {/* GLASS */}
+        <Panel open={activePanel === 'glass'}>
+          <ScoreChart forecast={forecast} />
+        </Panel>
 
         {/* TIDE */}
         <Panel open={activePanel === 'tide'}>
@@ -228,7 +256,7 @@ export default function ConditionsBar({
           <WindChart forecast={forecast} />
         </Panel>
 
-        {/* AIR / weather strip */}
+        {/* CONDITIONS / weather strip */}
         <Panel open={activePanel === 'air'}>
           <WeatherStrip forecast={forecast} />
         </Panel>
