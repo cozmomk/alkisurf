@@ -22,6 +22,7 @@ import ReportButton from './components/ReportButton.jsx';
 import ConditionsSprite from './components/ConditionsSprite.jsx';
 import ConditionsHistory from './components/ConditionsHistory.jsx';
 import InsightsPanel from './components/InsightsPanel.jsx';
+import ScoreChart from './components/ScoreChart.jsx';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 const POLL_MS = 5 * 60 * 1000; // 5 minutes
@@ -190,6 +191,35 @@ export default function App() {
           </div>
         )}
 
+        {/* Glass score 36h forecast chart */}
+        {data?.forecast?.length > 0 && (
+          <ScoreChart forecast={data.forecast} />
+        )}
+
+        {/* Animated conditions sprite */}
+        {scores && (
+          <ConditionsSprite
+            score={Math.max(scores.north.score, scores.south.score)}
+            windSpeedKt={current?.windSpeedKt}
+            windDirDeg={windDirDeg}
+            windDirLabel={current?.windDirLabel ?? null}
+            windGustKt={current?.windGustKt ?? currentForecast?.windGustKt ?? null}
+            skyCover={currentForecast?.skyCover ?? null}
+            shortForecast={currentForecast?.shortForecast ?? null}
+            precipProbability={currentForecast?.precipProbability ?? null}
+            uvIndex={currentForecast?.uvIndex ?? null}
+            precipInPerHr={currentForecast?.precipInPerHr ?? null}
+            waterTempF={current?.waterTempF ?? null}
+            tideCurrentFt={current?.tideCurrentFt ?? null}
+            nextHilos={data?.nextHilos ?? null}
+            airTempF={current?.airTempF ?? null}
+            sunriseTs={sunriseTs}
+            sunsetTs={sunsetTs}
+            godMode={godMode}
+            onTripleTap={() => setGodMode(g => !g)}
+          />
+        )}
+
         {/* Best side banner */}
         {scores && (() => {
           const gap = Math.abs(scores.north.score - scores.south.score);
@@ -225,30 +255,6 @@ export default function App() {
           sunsetTs={sunsetTs}
           forecast={data?.forecast ?? []}
         />
-
-        {/* Animated conditions sprite */}
-        {scores && (
-          <ConditionsSprite
-            score={Math.max(scores.north.score, scores.south.score)}
-            windSpeedKt={current?.windSpeedKt}
-            windDirDeg={windDirDeg}
-            windDirLabel={current?.windDirLabel ?? null}
-            windGustKt={current?.windGustKt ?? currentForecast?.windGustKt ?? null}
-            skyCover={currentForecast?.skyCover ?? null}
-            shortForecast={currentForecast?.shortForecast ?? null}
-            precipProbability={currentForecast?.precipProbability ?? null}
-            uvIndex={currentForecast?.uvIndex ?? null}
-            precipInPerHr={currentForecast?.precipInPerHr ?? null}
-            waterTempF={current?.waterTempF ?? null}
-            tideCurrentFt={current?.tideCurrentFt ?? null}
-            nextHilos={data?.nextHilos ?? null}
-            airTempF={current?.airTempF ?? null}
-            sunriseTs={sunriseTs}
-            sunsetTs={sunsetTs}
-            godMode={godMode}
-            onTripleTap={() => setGodMode(g => !g)}
-          />
-        )}
 
         {/* Side cards */}
         {scores && (
