@@ -13,7 +13,8 @@ const POSE_COLS = [0, 1, 2, 3, 4];
 // Alternate pose timing: every ALT_PERIOD seconds, show row-1 for ALT_DURATION seconds
 const ALT_PERIOD   = 45;  // total cycle length (seconds)
 const ALT_DURATION = 5;   // how long the alternate pose is shown each cycle
-const COLORS = ['#ff2b55','#ff2b55','#ff6b1a','#ff6b1a','#ffc300','#ffc300','#7dff4f','#7dff4f','#00e887','#00e887','#00e887'];
+// Aligned with scoreColor() in utils.js: 0-2=red, 3-4=orange, 5-6=yellow, 7-8=lime, 9-10=green
+const COLORS = ['#ff2b55','#ff2b55','#ff2b55','#ff6b1a','#ff6b1a','#ffc300','#ffc300','#7dff4f','#7dff4f','#00e887','#00e887'];
 
 function poseOf(s)     { return s>=9?4:s>=7?3:s>=5?2:s>=3?1:0; }
 function scoreToHs(s)  { return [.60,.52,.44,.34,.26,.20,.14,.09,.05,.03,.02][Math.round(s)]; }

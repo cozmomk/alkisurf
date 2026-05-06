@@ -37,11 +37,19 @@ function nowStr() {
   return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
 }
 
+// Hours needed from midnight-today to cover now + 48h chart window + 4h buffer.
+// range starts at midnight, so we add however many hours have already elapsed today.
+function rangeHours() {
+  const now = new Date();
+  const hoursElapsed = now.getHours() + now.getMinutes() / 60;
+  return Math.ceil(hoursElapsed + 52); // 48h chart + 4h buffer
+}
+
 export async function fetchTideData(fetchFn) {
   const [levelRes, predRes, hiloRes, wtempRes] = await Promise.all([
     fetchFn(`${BASE}?${params({ product: 'water_level', date: 'latest' })}`, { signal: AbortSignal.timeout(8000) }),
-    fetchFn(`${BASE}?${params({ product: 'predictions', begin_date: nowStr(), range: 52, interval: 'h' })}`, { signal: AbortSignal.timeout(8000) }),
-    fetchFn(`${BASE}?${params({ product: 'predictions', begin_date: nowStr(), range: 52, interval: 'hilo' })}`, { signal: AbortSignal.timeout(8000) }),
+    fetchFn(`${BASE}?${params({ product: 'predictions', begin_date: nowStr(), range: rangeHours(), interval: 'h' })}`, { signal: AbortSignal.timeout(8000) }),
+    fetchFn(`${BASE}?${params({ product: 'predictions', begin_date: nowStr(), range: rangeHours(), interval: 'hilo' })}`, { signal: AbortSignal.timeout(8000) }),
     fetchFn(`${BASE}?${wtempParams()}`, { signal: AbortSignal.timeout(8000) }),
   ]);
 
