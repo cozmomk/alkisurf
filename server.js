@@ -412,27 +412,18 @@ app.get('/api/conditions', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error('Conditions error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.get('/api/refresh', async (req, res) => {
-  cache = { data: null, ts: 0 };
-  try {
-    const data = await getConditions();
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Webcam proxy — bypasses hotlink protection, caches 30s
+// Webcam proxy — bypasses hotlink protection, caches 5min
 let webcamCache = { buf: null, contentType: null, ts: 0 };
+const WEBCAM_TTL = 5 * 60 * 1000; // 5 minutes — reduces load on alkiweather.com
 app.get('/api/webcam', async (req, res) => {
   try {
-    if (webcamCache.buf && Date.now() - webcamCache.ts < 30000) {
+    if (webcamCache.buf && Date.now() - webcamCache.ts < WEBCAM_TTL) {
       res.set('Content-Type', webcamCache.contentType);
-      res.set('Cache-Control', 'public, max-age=30');
+      res.set('Cache-Control', 'public, max-age=300');
       return res.send(webcamCache.buf);
     }
     const img = await fetch('https://www.alkiweather.com/wxalkiwebcam.php', {
@@ -444,7 +435,7 @@ app.get('/api/webcam', async (req, res) => {
     const buf = Buffer.from(await img.arrayBuffer());
     webcamCache = { buf, contentType, ts: Date.now() };
     res.set('Content-Type', contentType);
-    res.set('Cache-Control', 'public, max-age=30');
+    res.set('Cache-Control', 'public, max-age=300');
     res.send(buf);
   } catch (err) {
     res.status(502).json({ error: 'Camera unavailable' });
@@ -481,7 +472,7 @@ app.get('/api/insights', (req, res) => {
     const mae = errors.length ? (errors.reduce((a, v) => a + v, 0) / errors.length).toFixed(1) : null;
 
     res.json({ totalReports: reports.length, meanAbsoluteError: mae, breakdown });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // POST /api/report — user-submitted condition report
