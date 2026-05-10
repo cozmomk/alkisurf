@@ -21,7 +21,7 @@ import InstallNudge from './components/InstallNudge.jsx';
 import ReportButton from './components/ReportButton.jsx';
 import ConditionsSprite from './components/ConditionsSprite.jsx';
 import InsightsPanel from './components/InsightsPanel.jsx';
-import GlassCalendar from './components/GlassCalendar.jsx';
+import SurfHistory from './components/GlassCalendar.jsx';
 import { conditionsEmoji, scoreColor } from './utils.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -376,7 +376,7 @@ export default function App() {
         <ReportButton />
 
         {/* Glass calendar — daily UV-filtered best scores */}
-        <GlassCalendar />
+        <SurfHistory />
 
         {/* Model calibration */}
         <InsightsPanel />

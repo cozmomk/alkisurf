@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { scoreColor } from '../utils.js';
 
 function ptDate(dateStr) {
@@ -57,15 +57,12 @@ function filtersActive(f) {
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const CELL = 32;
 
 function FilterBar({ filters, onChange }) {
   const activePreset = TIME_PRESETS.find(
     p => p.timeStart === filters.timeStart && p.timeEnd === filters.timeEnd
   );
-
-  function setTimePreset(preset) {
-    onChange({ ...filters, timeStart: preset.timeStart, timeEnd: preset.timeEnd });
-  }
 
   const chipBase = {
     padding: '3px 10px',
@@ -87,13 +84,12 @@ function FilterBar({ filters, onChange }) {
 
   return (
     <div className="flex flex-wrap gap-2 items-center">
-      {/* Time window dropdown */}
       <div className="relative">
         <select
           value={activePreset?.label ?? 'All day'}
           onChange={e => {
             const p = TIME_PRESETS.find(p => p.label === e.target.value);
-            if (p) setTimePreset(p);
+            if (p) onChange({ ...filters, timeStart: p.timeStart, timeEnd: p.timeEnd });
           }}
           style={{
             ...chipBase,
@@ -102,7 +98,6 @@ function FilterBar({ filters, onChange }) {
             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235a7fa0'/%3E%3C/svg%3E")`,
             backgroundRepeat: 'no-repeat',
             backgroundPosition: 'right 7px center',
-            cursor: 'pointer',
           }}>
           {TIME_PRESETS.map(p => (
             <option key={p.label} value={p.label}>{p.label}</option>
@@ -110,21 +105,18 @@ function FilterBar({ filters, onChange }) {
         </select>
       </div>
 
-      {/* Sunny only */}
       <button
         onClick={() => onChange({ ...filters, sunnyOnly: !filters.sunnyOnly })}
         style={filters.sunnyOnly ? chipActive : chipBase}>
         ☀ Sunny only
       </button>
 
-      {/* Min air temp */}
       <button
         onClick={() => onChange({ ...filters, minAirTempF: filters.minAirTempF ? 0 : 60 })}
         style={filters.minAirTempF ? chipActive : chipBase}>
         🌡 60°F+
       </button>
 
-      {/* Reset */}
       {filtersActive(filters) && (
         <button
           onClick={() => onChange(DEFAULT_FILTERS)}
@@ -136,11 +128,109 @@ function FilterBar({ filters, onChange }) {
   );
 }
 
-export default function GlassCalendar() {
+function MonthGrid({ year, month, byDate, filters, selected, onSelect, todayStr }) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDow = new Date(year, month, 1).getDay();
+  const monthLabel = new Date(year, month, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) {
+    cells.push({ blank: true, key: `blank-${i}` });
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    cells.push({ blank: false, dateStr, day: d });
+  }
+
+  return (
+    <div style={{ flexShrink: 0 }}>
+      <div className="text-[9px] font-semibold uppercase tracking-wider pb-1" style={{ color: '#3a5a70' }}>
+        {monthLabel}
+      </div>
+
+      <div className="grid gap-[3px] mb-[3px]" style={{ gridTemplateColumns: `repeat(7, ${CELL}px)` }}>
+        {DAY_LABELS.map(d => (
+          <div key={d} className="text-center text-[8px] font-semibold uppercase"
+            style={{ color: '#3a5a70', width: CELL }}>
+            {d.slice(0, 1)}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-[3px]" style={{ gridTemplateColumns: `repeat(7, ${CELL}px)` }}>
+        {cells.map(cell => {
+          if (cell.blank) return <div key={cell.key} style={{ width: CELL, height: CELL }} />;
+
+          const { dateStr, day } = cell;
+          const data = byDate[dateStr] ?? null;
+          const d = ptDate(dateStr);
+          const isToday = dateStr === todayStr;
+          const isFuture = d > new Date();
+          const isSelected = selected === dateStr;
+
+          if (!data || isFuture) {
+            return (
+              <div key={dateStr} style={{
+                width: CELL, height: CELL,
+                borderRadius: 4,
+                background: isToday ? 'rgba(255,255,255,0.1)' : 'transparent',
+                outline: isToday ? '2px solid rgba(255,255,255,0.6)' : 'none',
+                outlineOffset: 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.15)', fontWeight: 500 }}>{day}</span>
+              </div>
+            );
+          }
+
+          const filteredScore = getFilteredScore(data, filters);
+          const filteredOut = filteredScore === null;
+          const color = filteredOut ? null : scoreColor(filteredScore);
+
+          return (
+            <button
+              key={dateStr}
+              onClick={() => onSelect(isSelected ? null : dateStr)}
+              aria-label={`${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: ${filteredOut ? 'filtered out' : `score ${filteredScore}`}`}
+              style={{
+                width: CELL, height: CELL,
+                borderRadius: 4,
+                background: color ? `${color}b3` : 'rgba(255,255,255,0.05)',
+                border: filteredOut
+                  ? '1px dashed rgba(255,255,255,0.18)'
+                  : isSelected
+                    ? `1px solid ${color}`
+                    : '1px solid transparent',
+                outline: isToday
+                  ? '2px solid rgba(255,255,255,0.65)'
+                  : isSelected
+                    ? '2px solid white'
+                    : 'none',
+                outlineOffset: 1,
+                boxShadow: isSelected && color ? `0 0 8px ${color}66` : 'none',
+                cursor: 'pointer',
+                padding: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+              <span style={{
+                fontSize: 9, fontWeight: 600,
+                color: 'rgba(255,255,255,0.55)',
+                lineHeight: 1, pointerEvents: 'none',
+              }}>{day}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function SurfHistory() {
   const [rows, setRows] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const scrollRef = useRef(null);
 
   useEffect(() => {
     fetch('/api/daily-summary')
@@ -152,141 +242,68 @@ export default function GlassCalendar() {
       .catch(() => setLoading(false));
   }, []);
 
+  // Scroll to rightmost (most recent month) after data loads
+  useEffect(() => {
+    if (scrollRef.current && rows.length) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+    }
+  }, [rows]);
+
   if (loading) return (
     <div className="flex flex-col gap-3">
-      <span className="section-title">Glass Calendar</span>
+      <span className="section-title">Surf History</span>
       <div className="text-[10px] text-center py-4" style={{ color: '#3a5a70' }}>Loading…</div>
     </div>
   );
 
   if (!rows.length) return (
     <div className="flex flex-col gap-3">
-      <span className="section-title">Glass Calendar</span>
+      <span className="section-title">Surf History</span>
       <div className="text-[10px] text-center py-4" style={{ color: '#3a5a70' }}>
-        No daily history yet — check back tomorrow.
+        No history yet — check back tomorrow.
       </div>
     </div>
   );
 
   const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
   const byDate = Object.fromEntries(sorted.map(r => [r.date, r]));
-
-  const first = ptDate(sorted[0].date);
-  const last  = ptDate(sorted[sorted.length - 1].date);
-
-  const startDay = new Date(first);
-  startDay.setDate(startDay.getDate() - startDay.getDay());
-
-  const endDay = new Date(last);
-  endDay.setDate(endDay.getDate() + (6 - endDay.getDay()));
-
-  const weeks = [];
-  let week = [];
-  const cur = new Date(startDay);
-  while (cur <= endDay) {
-    const dateStr = cur.toLocaleDateString('en-CA');
-    week.push({ dateStr, data: byDate[dateStr] ?? null });
-    if (week.length === 7) { weeks.push(week); week = []; }
-    cur.setDate(cur.getDate() + 1);
-  }
-  if (week.length) weeks.push(week);
-
-  // Month banners (oldest-first)
-  let lastBannerMonth = null;
-  const weekBanners = weeks.map(wk => {
-    const sun = ptDate(wk[0].dateStr);
-    const month = sun.getMonth();
-    const year = sun.getFullYear();
-    if (month !== lastBannerMonth) {
-      lastBannerMonth = month;
-      return { month, year };
-    }
-    return null;
-  });
-
   const todayStr = new Date().toLocaleDateString('en-CA');
+
+  // Build list of months from first data point through current month
+  const firstDate = ptDate(sorted[0].date);
+  const today = new Date();
+  const months = [];
+  const cur = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+  const endMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  while (cur <= endMonth) {
+    months.push({ year: cur.getFullYear(), month: cur.getMonth() });
+    cur.setMonth(cur.getMonth() + 1);
+  }
 
   return (
     <div className="flex flex-col gap-3">
-      <span className="section-title">Glass Calendar</span>
+      <span className="section-title">Surf History</span>
 
       <FilterBar filters={filters} onChange={setFilters} />
 
-      {/* DOW header */}
-      <div className="grid gap-[3px]" style={{ gridTemplateColumns: 'repeat(7, 24px)' }}>
-        {DAY_LABELS.map(d => (
-          <div key={d} className="text-center text-[8px] font-semibold uppercase tracking-wider"
-            style={{ color: '#3a5a70', width: '24px' }}>{d.slice(0, 1)}</div>
+      <div
+        ref={scrollRef}
+        style={{ overflowX: 'auto', display: 'flex', gap: '20px', paddingBottom: '8px' }}>
+        {months.map(({ year, month }) => (
+          <MonthGrid
+            key={`${year}-${month}`}
+            year={year}
+            month={month}
+            byDate={byDate}
+            filters={filters}
+            selected={selected}
+            onSelect={setSelected}
+            todayStr={todayStr}
+          />
         ))}
       </div>
 
-      {/* Weeks with month banners */}
-      {weeks.map((week, wi) => (
-        <div key={wi} className="flex flex-col gap-[3px]">
-          {weekBanners[wi] && (
-            <div className="text-[9px] font-semibold uppercase tracking-wider pt-1"
-              style={{ color: '#3a5a70' }}>
-              {new Date(weekBanners[wi].year, weekBanners[wi].month, 1)
-                .toLocaleString('en-US', { month: 'long', year: 'numeric' })}
-            </div>
-          )}
-          <div className="grid gap-[3px]" style={{ gridTemplateColumns: 'repeat(7, 24px)' }}>
-            {week.map(({ dateStr, data }) => {
-              const d = ptDate(dateStr);
-              const isToday = dateStr === todayStr;
-              const isFuture = d > new Date();
-              const isSelected = selected === dateStr;
-
-              if (!data || isFuture) {
-                return (
-                  <div key={dateStr}
-                    style={{
-                      width: '24px', height: '24px',
-                      borderRadius: '4px',
-                      background: isToday ? 'rgba(255,255,255,0.1)' : 'transparent',
-                      outline: isToday ? '2px solid rgba(255,255,255,0.6)' : 'none',
-                      outlineOffset: '1px',
-                    }}
-                  />
-                );
-              }
-
-              const filteredScore = getFilteredScore(data, filters);
-              const filteredOut = filteredScore === null;
-              const color = filteredOut ? null : scoreColor(filteredScore);
-
-              return (
-                <button
-                  key={dateStr}
-                  onClick={() => setSelected(isSelected ? null : dateStr)}
-                  aria-label={`${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: ${filteredOut ? 'filtered out' : `score ${filteredScore}`}`}
-                  style={{
-                    width: '24px', height: '24px',
-                    borderRadius: '4px',
-                    background: color ? `${color}b3` : 'rgba(255,255,255,0.05)',
-                    border: filteredOut
-                      ? '1px dashed rgba(255,255,255,0.18)'
-                      : isSelected
-                        ? `1px solid ${color}`
-                        : '1px solid transparent',
-                    outline: isToday
-                      ? '2px solid rgba(255,255,255,0.65)'
-                      : isSelected
-                        ? `2px solid white`
-                        : 'none',
-                    outlineOffset: '1px',
-                    boxShadow: isSelected && color ? `0 0 8px ${color}66` : 'none',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
-                />
-              );
-            })}
-          </div>
-        </div>
-      ))}
-
-      {/* Score legend — compact dots */}
+      {/* Score legend */}
       <div className="flex gap-3 flex-wrap pt-1">
         {[
           { color: '#00e887', label: 'Glass' },
@@ -322,7 +339,6 @@ export default function GlassCalendar() {
             : `${formatHour(r.bestWindowStart)}–${formatHour(r.bestWindowEnd)}`
           : null;
 
-        // Compute filtered stats from hours[]
         const hrs = r.hours ?? [];
         const passingHrs = filtersActive(filters) && hrs.length
           ? hrs.filter(h =>
