@@ -45,8 +45,8 @@ function getFilteredScore(row, filters) {
   const passing = hrs.filter(h =>
     h.h >= filters.timeStart &&
     h.h <= filters.timeEnd &&
-    (!filters.sunnyOnly || (h.uv ?? 0) >= 1) &&
-    (!filters.minAirTempF || (h.airTempF ?? 0) >= filters.minAirTempF)
+    (!filters.sunnyOnly || h.uv == null || h.uv >= 1) &&
+    (!filters.minAirTempF || h.airTempF == null || h.airTempF >= filters.minAirTempF)
   );
   if (!passing.length) return null;
   return Math.max(...passing.map(h => h.score));
@@ -344,8 +344,8 @@ export default function SurfHistory() {
           ? hrs.filter(h =>
               h.h >= filters.timeStart &&
               h.h <= filters.timeEnd &&
-              (!filters.sunnyOnly || (h.uv ?? 0) >= 1) &&
-              (!filters.minAirTempF || (h.airTempF ?? 0) >= filters.minAirTempF)
+              (!filters.sunnyOnly || h.uv == null || h.uv >= 1) &&
+              (!filters.minAirTempF || h.airTempF == null || h.airTempF >= filters.minAirTempF)
             )
           : null;
 
