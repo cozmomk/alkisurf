@@ -623,8 +623,66 @@ function scheduleMidnightSummary() {
     setInterval(buildDailySummary, 24 * 60 * 60 * 1000);
   }, msUntilMidnight);
 }
+// Backfill historical temperature + UV into existing daily-summary hours[] using
+// Open-Meteo archive API (free, no key, ERA5 reanalysis, ~2-day lag).
+// Patches only null slots — safe to re-run on every startup.
+async function backfillHistoricalWeather() {
+  try {
+    if (!fs.existsSync(DAILY_SUMMARY_LOG)) return;
+    const summaries = readJsonl(DAILY_SUMMARY_LOG);
+
+    // Skip today — archive lags ~2 days behind real-time
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const needsBackfill = summaries.filter(s =>
+      s.date < todayStr &&
+      s.hours?.some(h => h.airTempF == null || h.uv == null)
+    );
+    if (!needsBackfill.length) return;
+
+    const startDate = needsBackfill[0].date;
+    const endDate = needsBackfill[needsBackfill.length - 1].date;
+    console.log(`[backfill] Fetching historical weather ${startDate} → ${endDate} (${needsBackfill.length} days)`);
+
+    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=47.58&longitude=-122.42&start_date=${startDate}&end_date=${endDate}&hourly=temperature_2m,uv_index&timezone=America%2FLos_Angeles`;
+    const resp = await fetch(url);
+    if (!resp.ok) { console.error('[backfill] HTTP', resp.status); return; }
+    const data = await resp.json();
+    if (!data.hourly?.time) { console.error('[backfill] Unexpected response'); return; }
+
+    // Build lookup: "YYYY-MM-DDTHH:00" → { airTempF, uv }
+    const wx = {};
+    data.hourly.time.forEach((t, i) => {
+      const tempC = data.hourly.temperature_2m[i];
+      wx[t] = {
+        airTempF: tempC != null ? Math.round(tempC * 9 / 5 + 32) : null,
+        uv: data.hourly.uv_index[i] ?? null,
+      };
+    });
+
+    let patchCount = 0;
+    const updated = summaries.map(s => {
+      if (s.date >= todayStr || !s.hours?.some(h => h.airTempF == null || h.uv == null)) return s;
+      const patchedHours = s.hours.map(h => {
+        if (h.airTempF != null && h.uv != null) return h;
+        const key = `${s.date}T${String(h.h).padStart(2, '0')}:00`;
+        const w = wx[key];
+        if (!w) return h;
+        patchCount++;
+        return { ...h, airTempF: h.airTempF ?? w.airTempF, uv: h.uv ?? w.uv };
+      });
+      return { ...s, hours: patchedHours };
+    });
+
+    if (patchCount > 0) {
+      fs.writeFileSync(DAILY_SUMMARY_LOG, updated.map(r => JSON.stringify(r)).join('\n') + '\n');
+      console.log(`[backfill] Patched ${patchCount} hour-slots across ${needsBackfill.length} days`);
+    }
+  } catch (e) { console.error('[backfill]', e.message); }
+}
+
 scheduleMidnightSummary();
 buildDailySummary(); // backfill any existing history on startup
+backfillHistoricalWeather(); // async: enrich historical hours with Open-Meteo archive data
 
 // GET /api/daily-summary — calendar data
 app.get('/api/daily-summary', (req, res) => {
