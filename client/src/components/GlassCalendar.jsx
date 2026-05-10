@@ -32,12 +32,18 @@ export default function GlassCalendar() {
   }, []);
 
   if (loading) return (
-    <div className="text-[10px] text-center py-4" style={{ color: '#3a5a70' }}>Loading history…</div>
+    <div className="flex flex-col gap-3">
+      <span className="section-title">Glass Calendar</span>
+      <div className="text-[10px] text-center py-4" style={{ color: '#3a5a70' }}>Loading…</div>
+    </div>
   );
 
   if (!rows.length) return (
-    <div className="text-[10px] text-center py-4" style={{ color: '#3a5a70' }}>
-      No daily history yet — check back tomorrow.
+    <div className="flex flex-col gap-3">
+      <span className="section-title">Glass Calendar</span>
+      <div className="text-[10px] text-center py-4" style={{ color: '#3a5a70' }}>
+        No daily history yet — check back tomorrow.
+      </div>
     </div>
   );
 
