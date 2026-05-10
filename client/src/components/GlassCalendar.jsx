@@ -375,9 +375,17 @@ export default function SurfHistory() {
               </button>
             </div>
 
-            {filteredScore === null && filtersActive(filters) && (
-              <div className="text-[9px]" style={{ color: '#ff6b1a' }}>
-                No hours match current filters — showing unfiltered best.
+            {filtersActive(filters) && passingHrs !== null && (
+              <div className="text-[9px]" style={{ color: '#3a5a70' }}>
+                {passingHrs.length === 0
+                  ? <span style={{ color: '#ff6b1a' }}>No hours match filters — showing unfiltered.</span>
+                  : <>
+                      {passingHrs.length} of {hrs.length} hrs match filters
+                      {filteredScore !== null && filteredScore !== r.bestScore &&
+                        <span style={{ color: '#5a7fa0' }}> · unfiltered best: {r.bestScore}</span>
+                      }
+                    </>
+                }
               </div>
             )}
 
