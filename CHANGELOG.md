@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-05-09
+
+### Added
+- **Compact Glass Calendar** — replaced 44px score-number cells with 24px pure color-coded squares; multi-month view with month banners, oldest-to-newest order
+- **Client-side calendar filters** — time window preset (All day / Dawn / Morning / Afternoon / Evening), Sunny only (UV ≥ 1), and 60°F+ air temp toggle; filtered-out days show dashed border
+- **Per-hour data in daily summary** — `hours[]` array now logged per day `{h, score, uv, airTempF, waterTempF}` enabling client-side filter recomputation
+- **Air temp logging** — `airTempF` captured from nearest NWS forecast hour in hourly conditions snapshot (buoy doesn't carry air temp)
+- **Best window in detail panel** — shows the best contiguous hour range (glass/ripple preferred) when no filters active
+- **Detail panel close button** — × button to dismiss selected day panel
+
+### Fixed
+- **North side westerly fetch severely underestimated** — W/WNW/NW/NNW fetch distances corrected (e.g., W: 2000m→5500m, NW: 4200m→6500m) based on actual Alki geography facing Bainbridge
+
+### Changed
+- **AVG score in detail panel** — now shown in neutral `#8aacbf` (was scored color, which was misleading)
+- **Daily summary migration** — on server restart, if existing summary lacks `hours[]`, file is rebuilt automatically
+
 ## [1.1.0] - 2026-04-24
 
 ### Added

@@ -514,13 +514,18 @@ app.get('/api/history', (req, res) => {
 // Hourly conditions snapshot
 function logConditionsSnapshot() {
   if (!cache.data) return;
-  const { updatedAt, current } = cache.data;
+  const { updatedAt, current, forecast } = cache.data;
   if (!current) return;
+  // Pull air temp from the NWS forecast hour nearest to now (buoy doesn't carry air temp)
+  const now = Date.now();
+  const nearestFx = (forecast ?? []).reduce((best, h) =>
+    h.airTempF != null && Math.abs(h.time - now) < Math.abs((best?.time ?? Infinity) - now) ? h : best, null);
   appendJsonl(CONDITIONS_LOG, {
     ts: updatedAt,
     windSpeedKt: current.windSpeedKt,
     windDirDeg: current.windDirDeg,
     waterTempF: current.waterTempF,
+    airTempF: nearestFx?.airTempF ?? null,
     uvIndex: current.uvIndex ?? null,
     north: current.scores?.north ?? null,
     south: current.scores?.south ?? null,
@@ -534,10 +539,16 @@ function buildDailySummary() {
     const entries = readJsonl(CONDITIONS_LOG);
     if (!entries.length) return;
 
+    // Migrate: if existing summary lacks hours[], rebuild from scratch
+    if (fs.existsSync(DAILY_SUMMARY_LOG)) {
+      const first = readJsonl(DAILY_SUMMARY_LOG)[0];
+      if (first && first.hours === undefined) fs.unlinkSync(DAILY_SUMMARY_LOG);
+    }
+
     // Group by local date string (YYYY-MM-DD)
     const byDay = {};
     for (const e of entries) {
-      const day = new Date(e.ts).toLocaleDateString('en-CA'); // 'en-CA' gives YYYY-MM-DD
+      const day = new Date(e.ts).toLocaleDateString('en-CA');
       if (!byDay[day]) byDay[day] = [];
       byDay[day].push(e);
     }
@@ -545,11 +556,19 @@ function buildDailySummary() {
     const existing = new Set(readJsonl(DAILY_SUMMARY_LOG).map(r => r.date));
 
     for (const [date, hours] of Object.entries(byDay)) {
-      if (existing.has(date)) continue; // already summarised
+      if (existing.has(date)) continue;
+
+      // Deduplicate by hour — keep most recent entry per hour (Railway restarts cause duplicates)
+      const byHour = {};
+      for (const e of hours) {
+        const hr = new Date(e.ts).getHours();
+        if (!byHour[hr] || e.ts > byHour[hr].ts) byHour[hr] = e;
+      }
+      const deduped = Object.values(byHour);
 
       // Filter to UV daylight hours (uvIndex >= 1), fall back to all hours if no UV data
-      const hasUV = hours.some(h => h.uvIndex != null);
-      const daylight = hasUV ? hours.filter(h => (h.uvIndex ?? 0) >= 1) : hours;
+      const hasUV = deduped.some(h => h.uvIndex != null);
+      const daylight = hasUV ? deduped.filter(h => (h.uvIndex ?? 0) >= 1) : deduped;
       if (!daylight.length) continue;
 
       const bestScore = daylight.reduce((best, h) => {
@@ -565,7 +584,30 @@ function buildDailySummary() {
         Math.max(h.north?.score ?? 0, h.south?.score ?? 0) >= 7
       ).length;
 
-      appendJsonl(DAILY_SUMMARY_LOG, { date, bestScore, avgScore, glassHours, sampleCount: daylight.length });
+      // Best window: prefer glass/ripple hours (>=7), fall back to hours at bestScore
+      const glassEntries = daylight.filter(h => Math.max(h.north?.score ?? 0, h.south?.score ?? 0) >= 7);
+      const windowEntries = glassEntries.length
+        ? glassEntries
+        : daylight.filter(h => Math.max(h.north?.score ?? 0, h.south?.score ?? 0) === bestScore);
+      let bestWindowStart = null, bestWindowEnd = null;
+      if (windowEntries.length) {
+        const hrs = windowEntries.map(h => new Date(h.ts).getHours()).sort((a, b) => a - b);
+        bestWindowStart = hrs[0];
+        bestWindowEnd = hrs[hrs.length - 1]; // inclusive last hour
+      }
+
+      // Per-hour snapshot for client-side filtering (all deduped hours, not just daylight)
+      const hoursArr = Object.values(byHour)
+        .sort((a, b) => new Date(a.ts) - new Date(b.ts))
+        .map(e => ({
+          h: new Date(e.ts).getHours(),
+          score: Math.max(e.north?.score ?? 0, e.south?.score ?? 0),
+          uv: e.uvIndex ?? null,
+          airTempF: e.airTempF ?? null,
+          waterTempF: e.waterTempF ?? null,
+        }));
+
+      appendJsonl(DAILY_SUMMARY_LOG, { date, bestScore, avgScore, glassHours, sampleCount: daylight.length, bestWindowStart, bestWindowEnd, hours: hoursArr });
     }
   } catch (e) { console.error('[daily-summary]', e.message); }
 }

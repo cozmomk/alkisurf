@@ -14,11 +14,11 @@ const FETCH_TABLE = {
     180:   200,   // S   — land blocks
     202.5: 200,   // SSW — land blocks
     225:   200,   // SW  — blocked by Alki peninsula
-    247.5: 500,   // WSW — slight opening
-    270:   2000,  // W   — partial opening to sound entrance
-    292.5: 3200,  // WNW
-    315:   4200,  // NW  — sound entrance
-    337.5: 5000,  // NNW
+    247.5: 1200,  // WSW — Alki peninsula offers some shelter but Sound opens up
+    270:   5500,  // W   — open to Bainbridge east shore (~7km), was severely underestimated
+    292.5: 6000,  // WNW — toward Rich Passage, more open
+    315:   6500,  // NW  — toward Sound entrance, longest westerly exposure
+    337.5: 5800,  // NNW — slight bump, Sound narrows toward ship canal
   },
   south: {
     0:     500,   // N   — blocked by Alki land mass
