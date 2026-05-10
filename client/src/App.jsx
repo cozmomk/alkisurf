@@ -20,7 +20,6 @@ import WebcamPanel from './components/WebcamPanel.jsx';
 import InstallNudge from './components/InstallNudge.jsx';
 import ReportButton from './components/ReportButton.jsx';
 import ConditionsSprite from './components/ConditionsSprite.jsx';
-import ConditionsHistory from './components/ConditionsHistory.jsx';
 import InsightsPanel from './components/InsightsPanel.jsx';
 import GlassCalendar from './components/GlassCalendar.jsx';
 import { conditionsEmoji, scoreColor } from './utils.js';
@@ -375,9 +374,6 @@ export default function App() {
 
         {/* Report conditions — moved above history */}
         <ReportButton />
-
-        {/* Glass history timeline */}
-        <ConditionsHistory />
 
         {/* Glass calendar — daily UV-filtered best scores */}
         <GlassCalendar />
