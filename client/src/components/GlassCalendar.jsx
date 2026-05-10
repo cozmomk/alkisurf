@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { scoreColor } from '../utils.js';
+import DayMiniChart from './DayMiniChart.jsx';
 
 function ptDate(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -356,6 +357,8 @@ export default function SurfHistory() {
           ? Math.round(passingHrs.reduce((s, h) => s + h.score, 0) / passingHrs.length)
           : r.avgScore;
 
+        const chartHours = passingHrs ?? hrs;
+
         return (
           <div className="rounded-xl p-4 flex flex-col gap-2 mt-1"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
@@ -378,35 +381,14 @@ export default function SurfHistory() {
               </div>
             )}
 
-            <div className="flex gap-4 items-end flex-wrap">
-              <div className="flex flex-col">
-                <span className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: '#3a5a70' }}>Best</span>
-                <span className="text-2xl font-bold leading-none" style={{ color }}>{displayScore}</span>
-                <span className="text-[9px] mt-0.5" style={{ color }}>{scoreLabel(displayScore)}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: '#3a5a70' }}>Avg</span>
-                <span className="text-xl font-bold leading-none" style={{ color: '#8aacbf' }}>{filteredAvg}</span>
-              </div>
-              {windowStr && !filtersActive(filters) && (
-                <div className="flex flex-col">
-                  <span className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: '#3a5a70' }}>Best window</span>
-                  <span className="text-[11px] font-semibold" style={{ color: '#5a7fa0' }}>{windowStr}</span>
-                </div>
-              )}
-              <div className="flex flex-col">
-                <span className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: '#3a5a70' }}>Glass hrs</span>
-                <span className="text-xl font-bold leading-none" style={{ color: filteredGlassHrs > 0 ? '#00e887' : '#3a5a70' }}>
-                  {filteredGlassHrs}h
-                </span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: '#3a5a70' }}>Readings</span>
-                <span className="text-[11px] font-semibold" style={{ color: '#5a7fa0' }}>
-                  {passingHrs ? passingHrs.length : r.sampleCount}
-                </span>
-              </div>
-            </div>
+            <DayMiniChart
+              hours={chartHours}
+              bestScore={displayScore}
+              avgScore={filteredAvg}
+              glassHours={filteredGlassHrs}
+              bestWindowStart={filtersActive(filters) ? null : r.bestWindowStart}
+              bestWindowEnd={filtersActive(filters) ? null : r.bestWindowEnd}
+            />
           </div>
         );
       })()}

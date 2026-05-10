@@ -539,10 +539,14 @@ function buildDailySummary() {
     const entries = readJsonl(CONDITIONS_LOG);
     if (!entries.length) return;
 
-    // Migrate: if existing summary lacks hours[], rebuild from scratch
+    // Migrate: rebuild if missing hours[], or if hours[] lacks per-side N/S scores
     if (fs.existsSync(DAILY_SUMMARY_LOG)) {
       const first = readJsonl(DAILY_SUMMARY_LOG)[0];
-      if (first && first.hours === undefined) fs.unlinkSync(DAILY_SUMMARY_LOG);
+      const needsRebuild = first && (
+        first.hours === undefined ||
+        (first.hours?.length > 0 && first.hours[0].north === undefined)
+      );
+      if (needsRebuild) fs.unlinkSync(DAILY_SUMMARY_LOG);
     }
 
     // Group by local date string (YYYY-MM-DD)
@@ -601,6 +605,8 @@ function buildDailySummary() {
         .sort((a, b) => new Date(a.ts) - new Date(b.ts))
         .map(e => ({
           h: new Date(e.ts).getHours(),
+          north: e.north?.score ?? null,
+          south: e.south?.score ?? null,
           score: Math.max(e.north?.score ?? 0, e.south?.score ?? 0),
           uv: e.uvIndex ?? null,
           airTempF: e.airTempF ?? null,
