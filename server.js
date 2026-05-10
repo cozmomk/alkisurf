@@ -582,6 +582,7 @@ function scheduleMidnightSummary() {
   }, msUntilMidnight);
 }
 scheduleMidnightSummary();
+buildDailySummary(); // backfill any existing history on startup
 
 // GET /api/daily-summary — calendar data
 app.get('/api/daily-summary', (req, res) => {
