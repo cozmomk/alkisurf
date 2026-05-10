@@ -23,10 +23,11 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 // Persistent data dir — Railway volume at /data, fallback to local
 const DATA_DIR = fs.existsSync('/data') ? '/data' : path.join(__dirname, '.data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-const CONDITIONS_LOG  = path.join(DATA_DIR, 'conditions-log.jsonl');
-const REPORTS_LOG     = path.join(DATA_DIR, 'reports.jsonl');
-const FORECAST_LOG    = path.join(DATA_DIR, 'forecast-log.jsonl');
-const RECORDS_FILE    = path.join(DATA_DIR, 'records.json');
+const CONDITIONS_LOG    = path.join(DATA_DIR, 'conditions-log.jsonl');
+const REPORTS_LOG       = path.join(DATA_DIR, 'reports.jsonl');
+const FORECAST_LOG      = path.join(DATA_DIR, 'forecast-log.jsonl');
+const RECORDS_FILE      = path.join(DATA_DIR, 'records.json');
+const DAILY_SUMMARY_LOG = path.join(DATA_DIR, 'daily-summary.jsonl');
 
 // ─── all-time records ─────────────────────────────────────────────────────────
 function loadRecords() {
@@ -364,6 +365,9 @@ async function buildConditions() {
     .filter(h => h.ts > now)
     .slice(0, 4);
 
+  const nearestUVNow = uvData.length ? uvData.reduce((best, u) =>
+    Math.abs(u.ts - now) < Math.abs((best?.ts ?? Infinity) - now) ? u : best, null) : null;
+
   const currentForApi = current ? {
     windSpeedKt:   current.speedKt,
     windGustKt:    current.gustKt,
@@ -374,6 +378,7 @@ async function buildConditions() {
     tideCurrentFt: tideData?.currentFt,
     tideDirection: tideData?.tideDirection,
     tideRateFtHr,
+    uvIndex:       nearestUVNow?.uvIndex ?? null,
     scores:        currentScores,
   } : null;
 
@@ -516,11 +521,75 @@ function logConditionsSnapshot() {
     windSpeedKt: current.windSpeedKt,
     windDirDeg: current.windDirDeg,
     waterTempF: current.waterTempF,
+    uvIndex: current.uvIndex ?? null,
     north: current.scores?.north ?? null,
     south: current.scores?.south ?? null,
   });
 }
 setInterval(logConditionsSnapshot, 60 * 60 * 1000); // every hour
+
+// Daily summary — runs at midnight, summarises UV-daylight hours only
+function buildDailySummary() {
+  try {
+    const entries = readJsonl(CONDITIONS_LOG);
+    if (!entries.length) return;
+
+    // Group by local date string (YYYY-MM-DD)
+    const byDay = {};
+    for (const e of entries) {
+      const day = new Date(e.ts).toLocaleDateString('en-CA'); // 'en-CA' gives YYYY-MM-DD
+      if (!byDay[day]) byDay[day] = [];
+      byDay[day].push(e);
+    }
+
+    const existing = new Set(readJsonl(DAILY_SUMMARY_LOG).map(r => r.date));
+
+    for (const [date, hours] of Object.entries(byDay)) {
+      if (existing.has(date)) continue; // already summarised
+
+      // Filter to UV daylight hours (uvIndex >= 1), fall back to all hours if no UV data
+      const hasUV = hours.some(h => h.uvIndex != null);
+      const daylight = hasUV ? hours.filter(h => (h.uvIndex ?? 0) >= 1) : hours;
+      if (!daylight.length) continue;
+
+      const bestScore = daylight.reduce((best, h) => {
+        const s = Math.max(h.north?.score ?? 0, h.south?.score ?? 0);
+        return s > best ? s : best;
+      }, 0);
+
+      const avgScore = Math.round(
+        daylight.reduce((sum, h) => sum + Math.max(h.north?.score ?? 0, h.south?.score ?? 0), 0) / daylight.length
+      );
+
+      const glassHours = daylight.filter(h =>
+        Math.max(h.north?.score ?? 0, h.south?.score ?? 0) >= 7
+      ).length;
+
+      appendJsonl(DAILY_SUMMARY_LOG, { date, bestScore, avgScore, glassHours, sampleCount: daylight.length });
+    }
+  } catch (e) { console.error('[daily-summary]', e.message); }
+}
+
+// Schedule daily summary at midnight
+function scheduleMidnightSummary() {
+  const now = new Date();
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  const msUntilMidnight = midnight - now;
+  setTimeout(() => {
+    buildDailySummary();
+    setInterval(buildDailySummary, 24 * 60 * 60 * 1000);
+  }, msUntilMidnight);
+}
+scheduleMidnightSummary();
+
+// GET /api/daily-summary — calendar data
+app.get('/api/daily-summary', (req, res) => {
+  try {
+    const rows = readJsonl(DAILY_SUMMARY_LOG);
+    res.json(rows);
+  } catch { res.json([]); }
+});
 
 // Serve built client in production
 app.use(express.static(path.join(__dirname, 'client/dist')));

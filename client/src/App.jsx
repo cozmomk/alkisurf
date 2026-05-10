@@ -22,6 +22,7 @@ import ReportButton from './components/ReportButton.jsx';
 import ConditionsSprite from './components/ConditionsSprite.jsx';
 import ConditionsHistory from './components/ConditionsHistory.jsx';
 import InsightsPanel from './components/InsightsPanel.jsx';
+import GlassCalendar from './components/GlassCalendar.jsx';
 import { conditionsEmoji, scoreColor } from './utils.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -377,6 +378,9 @@ export default function App() {
 
         {/* Glass history timeline */}
         <ConditionsHistory />
+
+        {/* Glass calendar — daily UV-filtered best scores */}
+        <GlassCalendar />
 
         {/* Model calibration */}
         <InsightsPanel />
