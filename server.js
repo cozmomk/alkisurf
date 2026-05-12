@@ -690,6 +690,60 @@ scheduleMidnightSummary();
 buildDailySummary(); // backfill any existing history on startup
 backfillHistoricalWeather(); // async: enrich historical hours with Open-Meteo archive data
 
+// ── CSO (Combined Sewer Overflow) water quality polling ──────────────────────
+const CSO_CSV_URL = 'https://aqua.kingcounty.gov/dnrp/library/wastewater/cso/img/CSO_metadata.CSV';
+const CSO_RADIUS_MILES = 2.0; // outfalls within this distance of Alki affect water quality
+
+let csoCache = { alerts: [], checkedAt: null };
+
+function haversineMiles(lat1, lon1, lat2, lon2) {
+  const toRad = d => d * Math.PI / 180;
+  const R = 3958.8;
+  const dlat = toRad(lat2 - lat1);
+  const dlon = toRad(lon2 - lon1);
+  const a = Math.sin(dlat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dlon / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+async function pollCSOStatus() {
+  try {
+    const resp = await fetch(CSO_CSV_URL);
+    if (!resp.ok) return;
+    const text = await resp.text();
+    const lines = text.replace(/\r/g, '').trim().split('\n');
+    if (lines.length < 2) return;
+
+    const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+    const alerts = [];
+
+    for (const line of lines.slice(1)) {
+      const vals = line.split(',').map(v => v.replace(/"/g, '').trim());
+      const row = Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? '']));
+
+      if ((row.CSO_TagName ?? '').startsWith('CSO_Status')) continue;
+      if (!['CurrentlyOverflowing', 'OverflowLast48hrs'].includes(row.Status)) continue;
+
+      const lat = parseFloat(row.Y_COORD);
+      const lon = parseFloat(row.X_COORD);
+      if (isNaN(lat) || isNaN(lon)) continue;
+
+      const dist = haversineMiles(47.58, -122.42, lat, lon);
+      if (dist <= CSO_RADIUS_MILES) {
+        alerts.push({ name: row.Name, tag: row.CSO_TagName, status: row.Status, distMiles: Math.round(dist * 10) / 10, updatedAt: row.DateTime });
+      }
+    }
+
+    csoCache = { alerts, checkedAt: new Date().toISOString() };
+    if (alerts.length) console.log(`[cso] ${alerts.length} active overflow(s) near Alki:`, alerts.map(a => `${a.tag} ${a.status}`).join(', '));
+  } catch (e) { console.error('[cso]', e.message); }
+}
+
+pollCSOStatus();
+setInterval(pollCSOStatus, 10 * 60 * 1000);
+
+// GET /api/cso-status — water quality / sewer overflow alerts near Alki
+app.get('/api/cso-status', (req, res) => res.json(csoCache));
+
 // GET /api/daily-summary — calendar data
 app.get('/api/daily-summary', (req, res) => {
   try {

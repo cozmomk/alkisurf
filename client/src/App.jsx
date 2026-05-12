@@ -22,6 +22,7 @@ import ReportButton from './components/ReportButton.jsx';
 import ConditionsSprite from './components/ConditionsSprite.jsx';
 import InsightsPanel from './components/InsightsPanel.jsx';
 import SurfHistory from './components/GlassCalendar.jsx';
+import CSOWarning from './components/CSOWarning.jsx';
 import { conditionsEmoji, scoreColor } from './utils.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -291,6 +292,9 @@ export default function App() {
             <span className="text-sm" style={{ color: '#5a7fa0' }}>Fetching Alki conditions…</span>
           </div>
         )}
+
+        {/* CSO water quality warning */}
+        <CSOWarning />
 
         {/* Smart banner — bold when glass now, compact when glass later */}
         {scores && (
