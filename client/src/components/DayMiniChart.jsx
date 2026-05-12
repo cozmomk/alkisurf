@@ -69,8 +69,12 @@ export default function DayMiniChart({ hours, bestScore, avgScore, glassHours, b
       return acc;
     }, []);
 
-    // Time tick labels every 2 hours
-    const ticks = sorted.filter(h => h.h % 2 === 0).map(h => ({ x: toX(h.h), label: formatHour(h.h) }));
+    // Time tick labels every 2 hours across the full range (independent of data point positions)
+    const firstTick = Math.ceil(hMin / 2) * 2;
+    const ticks = [];
+    for (let h = firstTick; h <= hMax; h += 2) {
+      ticks.push({ x: toX(h), label: formatHour(h) });
+    }
 
     // Best score dot
     const bestHour = sorted.reduce((best, h) => h.score > (best?.score ?? -1) ? h : best, null);
