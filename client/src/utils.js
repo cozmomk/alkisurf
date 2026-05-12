@@ -72,6 +72,43 @@ export function computeTrend(side, currentScore, forecast) {
   return { direction: 'steady', hoursUntil: null };
 }
 
+// Returns sunrise/sunset in decimal local hours (Pacific time) for a given lat/lon/date.
+// Uses NOAA solar position algorithm, accurate to ~10 minutes.
+export function sunriseSunset(lat, lon, dateStr) {
+  const toR = d => d * Math.PI / 180;
+  const [y, m, d] = dateStr.split('-').map(Number);
+
+  const JD = 367 * y
+    - Math.trunc(7 * (y + Math.trunc((m + 9) / 12)) / 4)
+    + Math.trunc(275 * m / 9)
+    + d + 1721013.5;
+
+  const n  = JD - 2451545.0;
+  const L  = ((280.460 + 0.9856474 * n) % 360 + 360) % 360;
+  const g  = toR(((357.528 + 0.9856003 * n) % 360 + 360) % 360);
+  const λ  = toR(L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g));
+  const ε  = toR(23.439);
+
+  const sinDec = Math.sin(ε) * Math.sin(λ);
+  const dec    = Math.asin(sinDec);
+  const RA     = Math.atan2(Math.cos(ε) * Math.sin(λ), Math.cos(λ));
+  const EqT    = (toR(L) - RA) * (12 / Math.PI);
+
+  const cosH = (Math.cos(toR(90 + 50 / 60)) - Math.sin(toR(lat)) * sinDec)
+             / (Math.cos(toR(lat)) * Math.cos(dec));
+  if (cosH >= 1)  return { sunrise: 12, sunset: 12 };
+  if (cosH <= -1) return { sunrise: 0,  sunset: 24 };
+
+  const H          = Math.acos(cosH) * (12 / Math.PI);
+  const transitUTC = 12 - EqT - lon / 15;
+  const utcOffset  = (m >= 3 && m <= 11) ? -7 : -8; // PDT / PST
+
+  return {
+    sunrise: transitUTC - H + utcOffset,
+    sunset:  transitUTC + H + utcOffset,
+  };
+}
+
 export function compassLabel(deg) {
   if (deg == null) return '—';
   const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];

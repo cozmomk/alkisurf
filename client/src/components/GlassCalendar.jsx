@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { scoreColor } from '../utils.js';
+import { scoreColor, sunriseSunset } from '../utils.js';
 import DayMiniChart from './DayMiniChart.jsx';
+
+const ALKI_LAT = 47.58;
+const ALKI_LON = -122.42;
 
 function ptDate(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -25,28 +28,36 @@ function formatHour(h) {
 }
 
 const TIME_PRESETS = [
-  { label: 'All day',   timeStart: 0,  timeEnd: 23 },
-  { label: 'Dawn',      timeStart: 5,  timeEnd: 8  },
-  { label: 'Morning',   timeStart: 6,  timeEnd: 12 },
-  { label: 'Afternoon', timeStart: 12, timeEnd: 18 },
-  { label: 'Evening',   timeStart: 16, timeEnd: 20 },
+  { label: 'All day',   daylight: false, timeStart: 0,  timeEnd: 23 },
+  { label: 'Daylight',  daylight: true,  timeStart: 0,  timeEnd: 23 },
+  { label: 'Dawn',      daylight: false, timeStart: 5,  timeEnd: 8  },
+  { label: 'Morning',   daylight: false, timeStart: 6,  timeEnd: 12 },
+  { label: 'Afternoon', daylight: false, timeStart: 12, timeEnd: 18 },
+  { label: 'Evening',   daylight: false, timeStart: 16, timeEnd: 20 },
 ];
 
 const DEFAULT_FILTERS = {
   timeStart: 0,
   timeEnd: 23,
-  sunnyOnly: false,
+  daylight: false,
   minAirTempF: 0,
 };
 
-function getFilteredScore(row, filters) {
+function daylightBounds(dateStr) {
+  const { sunrise, sunset } = sunriseSunset(ALKI_LAT, ALKI_LON, dateStr);
+  return { srH: Math.floor(sunrise), ssH: Math.floor(sunset) };
+}
+
+function getFilteredScore(row, filters, dateStr) {
   const hrs = row.hours ?? [];
   if (!hrs.length) return row.bestScore ?? null;
+
+  const { srH, ssH } = filters.daylight && dateStr ? daylightBounds(dateStr) : { srH: 0, ssH: 23 };
 
   const passing = hrs.filter(h =>
     h.h >= filters.timeStart &&
     h.h <= filters.timeEnd &&
-    (!filters.sunnyOnly || h.uv == null || h.uv >= 1) &&
+    (!filters.daylight || (h.h >= srH && h.h <= ssH)) &&
     (!filters.minAirTempF || h.airTempF == null || h.airTempF >= filters.minAirTempF)
   );
   if (!passing.length) return null;
@@ -54,7 +65,7 @@ function getFilteredScore(row, filters) {
 }
 
 function filtersActive(f) {
-  return f.timeStart !== 0 || f.timeEnd !== 23 || f.sunnyOnly || f.minAirTempF > 0;
+  return f.timeStart !== 0 || f.timeEnd !== 23 || f.daylight || f.minAirTempF > 0;
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -62,7 +73,7 @@ const CELL = 32;
 
 function FilterBar({ filters, onChange }) {
   const activePreset = TIME_PRESETS.find(
-    p => p.timeStart === filters.timeStart && p.timeEnd === filters.timeEnd
+    p => p.daylight === filters.daylight && p.timeStart === filters.timeStart && p.timeEnd === filters.timeEnd
   );
 
   const chipBase = {
@@ -90,7 +101,7 @@ function FilterBar({ filters, onChange }) {
           value={activePreset?.label ?? 'All day'}
           onChange={e => {
             const p = TIME_PRESETS.find(p => p.label === e.target.value);
-            if (p) onChange({ ...filters, timeStart: p.timeStart, timeEnd: p.timeEnd });
+            if (p) onChange({ ...filters, daylight: p.daylight, timeStart: p.timeStart, timeEnd: p.timeEnd });
           }}
           style={{
             ...chipBase,
@@ -105,12 +116,6 @@ function FilterBar({ filters, onChange }) {
           ))}
         </select>
       </div>
-
-      <button
-        onClick={() => onChange({ ...filters, sunnyOnly: !filters.sunnyOnly })}
-        style={filters.sunnyOnly ? chipActive : chipBase}>
-        ☀ Sunny only
-      </button>
 
       <button
         onClick={() => onChange({ ...filters, minAirTempF: filters.minAirTempF ? 0 : 60 })}
@@ -184,7 +189,7 @@ function MonthGrid({ year, month, byDate, filters, selected, onSelect, todayStr 
             );
           }
 
-          const filteredScore = getFilteredScore(data, filters);
+          const filteredScore = getFilteredScore(data, filters, dateStr);
           const filteredOut = filteredScore === null;
           const color = filteredOut ? null : scoreColor(filteredScore);
 
@@ -328,7 +333,7 @@ export default function SurfHistory() {
       {/* Detail panel */}
       {selected && byDate[selected] && (() => {
         const r = byDate[selected];
-        const filteredScore = getFilteredScore(r, filters);
+        const filteredScore = getFilteredScore(r, filters, selected);
         const displayScore = filteredScore ?? r.bestScore;
         const color = scoreColor(displayScore);
         const d = ptDate(selected);
@@ -341,11 +346,12 @@ export default function SurfHistory() {
           : null;
 
         const hrs = r.hours ?? [];
+        const { srH, ssH } = filters.daylight ? daylightBounds(selected) : { srH: 0, ssH: 23 };
         const passingHrs = filtersActive(filters) && hrs.length
           ? hrs.filter(h =>
               h.h >= filters.timeStart &&
               h.h <= filters.timeEnd &&
-              (!filters.sunnyOnly || h.uv == null || h.uv >= 1) &&
+              (!filters.daylight || (h.h >= srH && h.h <= ssH)) &&
               (!filters.minAirTempF || h.airTempF == null || h.airTempF >= filters.minAirTempF)
             )
           : null;
