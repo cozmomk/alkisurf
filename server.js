@@ -563,9 +563,11 @@ function buildDailySummary() {
       if (existing.has(date)) continue;
 
       // Deduplicate by hour — keep most recent entry per hour (Railway restarts cause duplicates)
+      // Pacific local hour so client-side daylight filter (which uses Pacific sunriseSunset) aligns.
+      const toPacificHour = ts => parseInt(new Date(ts).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false })) % 24;
       const byHour = {};
       for (const e of hours) {
-        const hr = new Date(e.ts).getHours();
+        const hr = toPacificHour(e.ts);
         if (!byHour[hr] || e.ts > byHour[hr].ts) byHour[hr] = e;
       }
       const deduped = Object.values(byHour);
@@ -595,7 +597,7 @@ function buildDailySummary() {
         : daylight.filter(h => Math.max(h.north?.score ?? 0, h.south?.score ?? 0) === bestScore);
       let bestWindowStart = null, bestWindowEnd = null;
       if (windowEntries.length) {
-        const hrs = windowEntries.map(h => new Date(h.ts).getHours()).sort((a, b) => a - b);
+        const hrs = windowEntries.map(h => toPacificHour(h.ts)).sort((a, b) => a - b);
         bestWindowStart = hrs[0];
         bestWindowEnd = hrs[hrs.length - 1]; // inclusive last hour
       }
@@ -604,7 +606,7 @@ function buildDailySummary() {
       const hoursArr = Object.values(byHour)
         .sort((a, b) => new Date(a.ts) - new Date(b.ts))
         .map(e => ({
-          h: new Date(e.ts).getHours(),
+          h: toPacificHour(e.ts),
           north: e.north?.score ?? null,
           south: e.south?.score ?? null,
           score: Math.max(e.north?.score ?? 0, e.south?.score ?? 0),
@@ -707,7 +709,7 @@ function haversineMiles(lat1, lon1, lat2, lon2) {
 
 async function pollCSOStatus() {
   try {
-    const resp = await fetch(CSO_CSV_URL);
+    const resp = await fetch(CSO_CSV_URL, { signal: AbortSignal.timeout(12000) });
     if (!resp.ok) return;
     const text = await resp.text();
     const lines = text.replace(/\r/g, '').trim().split('\n');

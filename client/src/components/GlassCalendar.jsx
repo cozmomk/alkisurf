@@ -68,6 +68,23 @@ function filtersActive(f) {
   return f.timeStart !== 0 || f.timeEnd !== 23 || f.daylight || f.minAirTempF > 0;
 }
 
+function computeFilteredWindow(hours) {
+  if (!hours?.length) return { start: null, end: null };
+  const glassHrs = hours.filter(h => h.score >= 7).map(h => h.h).sort((a, b) => a - b);
+  if (!glassHrs.length) return { start: null, end: null };
+  let bestStart = glassHrs[0], bestEnd = glassHrs[0], curStart = glassHrs[0], curEnd = glassHrs[0];
+  for (let i = 1; i < glassHrs.length; i++) {
+    if (glassHrs[i] - glassHrs[i - 1] <= 1) {
+      curEnd = glassHrs[i];
+    } else {
+      if (curEnd - curStart > bestEnd - bestStart) { bestStart = curStart; bestEnd = curEnd; }
+      curStart = glassHrs[i]; curEnd = glassHrs[i];
+    }
+  }
+  if (curEnd - curStart > bestEnd - bestStart) { bestStart = curStart; bestEnd = curEnd; }
+  return { start: bestStart, end: bestEnd };
+}
+
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const CELL = 32;
 
@@ -363,24 +380,6 @@ export default function SurfHistory() {
         const filteredAvg = passingHrs && passingHrs.length
           ? Math.round(passingHrs.reduce((s, h) => s + h.score, 0) / passingHrs.length)
           : r.avgScore;
-
-        // Compute best window from filtered hours when filters are active
-        const computeFilteredWindow = (hours) => {
-          if (!hours?.length) return { start: null, end: null };
-          const glassHrs = hours.filter(h => h.score >= 7).map(h => h.h).sort((a, b) => a - b);
-          if (!glassHrs.length) return { start: null, end: null };
-          let bestStart = glassHrs[0], bestEnd = glassHrs[0], curStart = glassHrs[0], curEnd = glassHrs[0];
-          for (let i = 1; i < glassHrs.length; i++) {
-            if (glassHrs[i] - glassHrs[i - 1] <= 1) {
-              curEnd = glassHrs[i];
-            } else {
-              if (curEnd - curStart > bestEnd - bestStart) { bestStart = curStart; bestEnd = curEnd; }
-              curStart = glassHrs[i]; curEnd = glassHrs[i];
-            }
-          }
-          if (curEnd - curStart > bestEnd - bestStart) { bestStart = curStart; bestEnd = curEnd; }
-          return { start: bestStart, end: bestEnd };
-        };
 
         const windowPassthrough = filtersActive(filters) && passingHrs
           ? computeFilteredWindow(passingHrs)
