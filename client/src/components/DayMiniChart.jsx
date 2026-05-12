@@ -30,7 +30,7 @@ function formatHour(h) {
   return h < 12 ? `${h}a` : `${h - 12}p`;
 }
 
-export default function DayMiniChart({ hours, bestScore, avgScore, glassHours, bestWindowStart, bestWindowEnd }) {
+export default function DayMiniChart({ hours, bestScore, avgScore, glassHours, bestWindowStart, bestWindowEnd, dateLabel }) {
   const pts = useMemo(() => {
     if (!hours?.length) return null;
     const sorted = [...hours].sort((a, b) => a.h - b.h);
@@ -82,9 +82,13 @@ export default function DayMiniChart({ hours, bestScore, avgScore, glassHours, b
     return { sorted, northPts, southPts, scorePts, windowBands, ticks, toX, svgW, hasNS, bestHour, hMin, hMax };
   }, [hours]);
 
-  if (!pts) return null;
+  if (!pts) return (
+    <div style={{ fontSize: 9, color: '#3a5a70', paddingTop: 4 }}>
+      No hourly data available for this date.
+    </div>
+  );
 
-  const { northPts, southPts, scorePts, windowBands, ticks, svgW, hasNS, bestHour, toX } = pts;
+  const { northPts, southPts, scorePts, windowBands, ticks, svgW, hasNS, bestHour, toX, hMin } = pts;
   const y7   = toY(7);
   const yBot = PAD_T + INNER_H;
   const color = scoreColor(bestScore);
@@ -137,6 +141,8 @@ export default function DayMiniChart({ hours, bestScore, avgScore, glassHours, b
         viewBox={`0 0 ${svgW} ${H}`}
         width="100%"
         height={H}
+        role="img"
+        aria-label={`Surf score chart${dateLabel ? ` for ${dateLabel}` : ''}, best score ${bestScore}`}
         style={{ display: 'block', overflow: 'visible' }}
       >
         {/* Glass window bands */}
@@ -191,6 +197,14 @@ export default function DayMiniChart({ hours, bestScore, avgScore, glassHours, b
           </text>
         ))}
       </svg>
+
+      {/* Glass band legend */}
+      {windowBands.length > 0 && (
+        <div className="flex items-center gap-1 pt-0.5">
+          <div style={{ width: 8, height: 8, background: 'rgba(0,232,135,0.18)', border: '1px solid rgba(0,232,135,0.25)', borderRadius: 1 }} />
+          <span style={{ fontSize: 8, color: '#3a5a70' }}>glass window (score ≥ 7)</span>
+        </div>
+      )}
     </div>
   );
 }

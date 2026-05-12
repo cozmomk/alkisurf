@@ -119,8 +119,9 @@ function FilterBar({ filters, onChange }) {
 
       <button
         onClick={() => onChange({ ...filters, minAirTempF: filters.minAirTempF ? 0 : 60 })}
+        aria-label="Filter to days with air temperature 60°F or warmer"
         style={filters.minAirTempF ? chipActive : chipBase}>
-        🌡 60°F+
+        60°F+
       </button>
 
       {filtersActive(filters) && (
@@ -363,6 +364,28 @@ export default function SurfHistory() {
           ? Math.round(passingHrs.reduce((s, h) => s + h.score, 0) / passingHrs.length)
           : r.avgScore;
 
+        // Compute best window from filtered hours when filters are active
+        const computeFilteredWindow = (hours) => {
+          if (!hours?.length) return { start: null, end: null };
+          const glassHrs = hours.filter(h => h.score >= 7).map(h => h.h).sort((a, b) => a - b);
+          if (!glassHrs.length) return { start: null, end: null };
+          let bestStart = glassHrs[0], bestEnd = glassHrs[0], curStart = glassHrs[0], curEnd = glassHrs[0];
+          for (let i = 1; i < glassHrs.length; i++) {
+            if (glassHrs[i] - glassHrs[i - 1] <= 1) {
+              curEnd = glassHrs[i];
+            } else {
+              if (curEnd - curStart > bestEnd - bestStart) { bestStart = curStart; bestEnd = curEnd; }
+              curStart = glassHrs[i]; curEnd = glassHrs[i];
+            }
+          }
+          if (curEnd - curStart > bestEnd - bestStart) { bestStart = curStart; bestEnd = curEnd; }
+          return { start: bestStart, end: bestEnd };
+        };
+
+        const windowPassthrough = filtersActive(filters) && passingHrs
+          ? computeFilteredWindow(passingHrs)
+          : { start: r.bestWindowStart, end: r.bestWindowEnd };
+
         const chartHours = passingHrs ?? hrs;
 
         return (
@@ -376,7 +399,8 @@ export default function SurfHistory() {
                 onClick={() => setSelected(null)}
                 aria-label="Close detail panel"
                 style={{ color: '#3a5a70', background: 'none', border: 'none', cursor: 'pointer',
-                         fontSize: '16px', lineHeight: 1, padding: '0 0 0 12px' }}>
+                         fontSize: '16px', lineHeight: 1, padding: '0 0 0 12px', minWidth: 44, minHeight: 44,
+                         display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 ×
               </button>
             </div>
@@ -400,8 +424,9 @@ export default function SurfHistory() {
               bestScore={displayScore}
               avgScore={filteredAvg}
               glassHours={filteredGlassHrs}
-              bestWindowStart={filtersActive(filters) ? null : r.bestWindowStart}
-              bestWindowEnd={filtersActive(filters) ? null : r.bestWindowEnd}
+              bestWindowStart={windowPassthrough.start}
+              bestWindowEnd={windowPassthrough.end}
+              dateLabel={label}
             />
           </div>
         );
