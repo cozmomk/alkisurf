@@ -151,12 +151,12 @@ function DayCard({ summary, isFirst, isSecond }) {
         <div className="flex items-center gap-2">
           {sunriseTs && (
             <span className="text-[8px]" style={{ color: '#5a7fa0' }}>
-              🌅 {fmtSunTime(sunriseTs)}
+              <span style={{ fontSize: 7, opacity: 0.7 }}>SR</span> {fmtSunTime(sunriseTs)}
             </span>
           )}
           {sunsetTs && (
             <span className="text-[8px]" style={{ color: '#5a7fa0' }}>
-              🌇 {fmtSunTime(sunsetTs)}
+              <span style={{ fontSize: 7, opacity: 0.7 }}>SS</span> {fmtSunTime(sunsetTs)}
             </span>
           )}
         </div>
