@@ -58,7 +58,7 @@ function getFilteredScore(row, filters, dateStr) {
     h.h >= filters.timeStart &&
     h.h <= filters.timeEnd &&
     (!filters.daylight || (h.h >= srH && h.h <= ssH)) &&
-    (!filters.minAirTempF || h.airTempF == null || h.airTempF >= filters.minAirTempF)
+    (!filters.minAirTempF || (h.airTempF != null && h.airTempF >= filters.minAirTempF))
   );
   if (!passing.length) return null;
   return Math.max(...passing.map(h => h.score));
@@ -370,7 +370,7 @@ export default function SurfHistory() {
               h.h >= filters.timeStart &&
               h.h <= filters.timeEnd &&
               (!filters.daylight || (h.h >= srH && h.h <= ssH)) &&
-              (!filters.minAirTempF || h.airTempF == null || h.airTempF >= filters.minAirTempF)
+              (!filters.minAirTempF || (h.airTempF != null && h.airTempF >= filters.minAirTempF))
             )
           : null;
 
