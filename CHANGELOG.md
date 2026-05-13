@@ -13,13 +13,19 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - **Daylight filter timezone mismatch** — daily summary was storing hour field (`h`) as UTC (Railway container clock) while the client daylight filter compared against Pacific local sunrise/sunset; all three server callsites now use `toLocaleString('America/Los_Angeles')` to match `sunriseSunset()` in utils.js
+- **Daily summary date grouping** — date bucketing used UTC midnight, causing late-Pacific-evening hours to land on the wrong calendar day; now uses explicit Pacific timezone throughout
+- **Partial daily summary recovery** — server restart mid-day would write an incomplete summary (only UTC hours 0–N logged so far) and permanently lock out a rebuild; startup now detects entries with < 6 hours logged, drops them, and rebuilds on next cycle; a "skip today" guard prevents today's in-progress summary from being written prematurely
+- **Forecast dots off lines** — the NOW-marker dots on the 48h forecast chart used the next forecast hour's score at the exact current-time X position; the bezier curve there is interpolated between two data points, so the dots floated above or below the line; dots now use linearly interpolated scores at exact now-time so they land on the line
+- **60°F+ filter includes hours with missing temperature** — null `airTempF` was treated as passing the ≥60°F check, so overnight glass hours with no recorded temperature were included while daytime hours with actual sub-60°F readings were excluded; null-temp hours are now excluded when the temperature filter is active
 - **Chart tick grid** — hour labels now generated at fixed 2-hour intervals across the full time range, not pinned to data point positions (which caused uneven spacing)
-- **Null UV/airTemp treated as zero** — calendar filters now treat missing data as unknown rather than 0, preventing days with no UV data from being excluded by the Daylight filter
+- **Null UV/airTemp treated as zero** — calendar Daylight filter now treats missing UV data as unknown rather than 0, preventing days with no UV data from being incorrectly excluded
 
 ### Changed
 - **Design system pass** — CSOWarning banner colors derived from score color tokens (#ff2b55 active, #ff6b1a recent) rather than hardcoded values; dismiss button meets 44px touch target; advisory text updated to match King County guidance
 - **Accessibility** — DayMiniChart SVG gets `role="img"` and `aria-label`; GlassCalendar close button gets `aria-label`; 60°F+ filter chip removes emoji decoration (DESIGN.md prohibits emoji as decoration)
 - **CSO fetch reliability** — `AbortSignal.timeout(12000)` added to prevent indefinite hang if King County server is slow
+- **3-Day Outlook sunrise/sunset** — decorative 🌅🌇 emoji replaced with compact "SR"/"SS" text labels per design system (no emoji as decoration)
+- **Forecast vs. actual visibility** — when the live buoy-based score differs from the NWS forecast score by ≥1 point, an outlined ring at the live score position appears to the left of the NOW line on the 48h chart, making the forecast/actual gap visible
 
 ---
 
