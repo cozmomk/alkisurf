@@ -549,17 +549,29 @@ function buildDailySummary() {
       if (needsRebuild) fs.unlinkSync(DAILY_SUMMARY_LOG);
     }
 
-    // Group by local date string (YYYY-MM-DD)
+    // Group by Pacific local date string (YYYY-MM-DD) — Railway runs UTC so timezone must be explicit.
+    const toPacificDate = ts => new Date(ts).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+    const todayPacific = toPacificDate(Date.now());
     const byDay = {};
     for (const e of entries) {
-      const day = new Date(e.ts).toLocaleDateString('en-CA');
+      const day = toPacificDate(e.ts);
       if (!byDay[day]) byDay[day] = [];
       byDay[day].push(e);
+    }
+
+    // Drop partial summaries (< 6 hours) written during server restarts mid-day — they'll be rebuilt.
+    const allSummaries = readJsonl(DAILY_SUMMARY_LOG);
+    const partialDates = new Set(allSummaries.filter(r => (r.hours?.length ?? 0) < 6).map(r => r.date));
+    if (partialDates.size) {
+      const clean = allSummaries.filter(r => !partialDates.has(r.date));
+      fs.writeFileSync(DAILY_SUMMARY_LOG, clean.map(r => JSON.stringify(r)).join('\n') + (clean.length ? '\n' : ''));
+      console.log(`[daily-summary] dropped ${partialDates.size} partial summary entries for rebuild:`, [...partialDates].join(', '));
     }
 
     const existing = new Set(readJsonl(DAILY_SUMMARY_LOG).map(r => r.date));
 
     for (const [date, hours] of Object.entries(byDay)) {
+      if (date >= todayPacific) continue; // skip today — partial data, will be built at midnight
       if (existing.has(date)) continue;
 
       // Deduplicate by hour — keep most recent entry per hour (Railway restarts cause duplicates)
@@ -640,7 +652,7 @@ async function backfillHistoricalWeather() {
     const summaries = readJsonl(DAILY_SUMMARY_LOG);
 
     // Skip today — archive lags ~2 days behind real-time
-    const todayStr = new Date().toLocaleDateString('en-CA');
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
     const needsBackfill = summaries.filter(s =>
       s.date < todayStr &&
       s.hours?.some(h => h.airTempF == null || h.uv == null)
