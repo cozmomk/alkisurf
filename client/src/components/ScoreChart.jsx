@@ -46,7 +46,7 @@ function fmt(ts, opts) {
   return new Date(ts).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', ...opts });
 }
 
-export default function ScoreChart({ forecast }) {
+export default function ScoreChart({ forecast, liveScores }) {
   const scrollRef = useRef(null);
   const now = Date.now();
 
@@ -148,10 +148,19 @@ export default function ScoreChart({ forecast }) {
         };
       });
 
-    // Current scores at NOW
-    const nowHour  = hours.find(h => h.time >= now) ?? hours[hours.length - 1];
-    const curNorth = nowHour?.sides?.north?.score ?? null;
-    const curSouth = nowHour?.sides?.south?.score ?? null;
+    // Interpolated scores at exact NOW — so dots land on the bezier lines
+    const prevHour = [...hours].reverse().find(h => h.time < now);
+    const nextHour = hours.find(h => h.time >= now);
+    let curNorth = null, curSouth = null;
+    if (prevHour && nextHour && nextHour.time > prevHour.time) {
+      const t = (now - prevHour.time) / (nextHour.time - prevHour.time);
+      curNorth = prevHour.sides.north.score * (1 - t) + nextHour.sides.north.score * t;
+      curSouth = prevHour.sides.south.score * (1 - t) + nextHour.sides.south.score * t;
+    } else {
+      const h = nextHour ?? prevHour ?? hours[hours.length - 1];
+      curNorth = h?.sides?.north?.score ?? null;
+      curSouth = h?.sides?.south?.score ?? null;
+    }
 
     return {
       northPts, southPts,
@@ -272,13 +281,13 @@ export default function ScoreChart({ forecast }) {
           <line x1={nowX} y1={PAD_T} x2={nowX} y2={yBot}
             stroke="#00e887" strokeWidth="1.5" strokeOpacity="0.55" strokeDasharray="3,3" />
 
-          {/* Score dots at NOW */}
+          {/* Score dots at NOW — Y interpolated so they sit on the line */}
           {curNorth != null && (
             <g>
               <circle cx={nowX} cy={toY(curNorth)} r={4} fill={scoreColor(curNorth)} opacity="0.95" />
               <text x={nowX + 6} y={toY(curNorth) + 3.5}
                 style={{ fontSize: 9, fill: scoreColor(curNorth), fontWeight: 800 }}>
-                {curNorth}
+                {Math.round(curNorth)}
               </text>
             </g>
           )}
@@ -287,7 +296,31 @@ export default function ScoreChart({ forecast }) {
               <circle cx={nowX} cy={toY(curSouth)} r={4} fill={scoreColor(curSouth)} opacity="0.95" />
               <text x={nowX + 6} y={toY(curSouth) + 3.5}
                 style={{ fontSize: 9, fill: scoreColor(curSouth), fontWeight: 800 }}>
-                {curSouth}
+                {Math.round(curSouth)}
+              </text>
+            </g>
+          )}
+
+          {/* Live score ring — actual buoy-based score when it differs from forecast */}
+          {liveScores?.north != null && curNorth != null &&
+            Math.abs(liveScores.north.score - curNorth) >= 1 && (
+            <g>
+              <circle cx={nowX} cy={toY(liveScores.north.score)} r={5}
+                fill="none" stroke={scoreColor(liveScores.north.score)} strokeWidth="1.5" opacity="0.8" />
+              <text x={nowX - 7} y={toY(liveScores.north.score) + 3.5} textAnchor="end"
+                style={{ fontSize: 9, fill: scoreColor(liveScores.north.score), fontWeight: 800, opacity: 0.8 }}>
+                {liveScores.north.score}
+              </text>
+            </g>
+          )}
+          {liveScores?.south != null && curSouth != null &&
+            Math.abs(liveScores.south.score - curSouth) >= 1 && (
+            <g>
+              <circle cx={nowX} cy={toY(liveScores.south.score)} r={5}
+                fill="none" stroke={scoreColor(liveScores.south.score)} strokeWidth="1.5" opacity="0.8" />
+              <text x={nowX - 7} y={toY(liveScores.south.score) + 3.5} textAnchor="end"
+                style={{ fontSize: 9, fill: scoreColor(liveScores.south.score), fontWeight: 800, opacity: 0.8 }}>
+                {liveScores.south.score}
               </text>
             </g>
           )}

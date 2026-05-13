@@ -239,7 +239,7 @@ export default function ConditionsBar({
 
         {/* GLASS */}
         <Panel open={activePanel === 'glass'}>
-          <ScoreChart forecast={forecast} />
+          <ScoreChart forecast={forecast} liveScores={scores} />
         </Panel>
 
         {/* TIDE */}
