@@ -721,8 +721,8 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
       const rainSpeedMult = 0.7 + windFactor * 0.6; // 0.7× calm → 1.3× full wind
 
       // Rain intensity from precipInPerHr (0.25 in/hr = heavy PNW rain = max scale)
-      const pih = overlayRef.current.precipInPerHr ?? null;
-      const rainIntensity = pih != null ? Math.min(1, Math.max(0.1, pih / 0.25)) : 0.5;
+      const precipRate = overlayRef.current.precipInPerHr ?? null;
+      const rainIntensity = precipRate != null ? Math.min(1, Math.max(0.1, precipRate / 0.25)) : 0.5;
       const rainDropCount  = Math.round(20 + rainIntensity * 90);   // 20–110 drops
       const rainAlphaScale = 0.4 + rainIntensity * 0.6;             // 0.4–1.0
       const rainLenScale   = 0.7 + rainIntensity * 0.6;             // 0.7–1.3
