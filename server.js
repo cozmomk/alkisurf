@@ -584,9 +584,18 @@ function buildDailySummary() {
       }
       const deduped = Object.values(byHour);
 
-      // Filter to UV daylight hours (uvIndex >= 1), fall back to all hours if no UV data
+      // Filter to UV daylight hours (uvIndex >= 1).
+      // Rainy/overcast days return UV=0 all day (not null) — don't skip them.
+      // Fall back to Pacific hour 6–21 when no hours reach UV>=1 (e.g. solid overcast/rain).
       const hasUV = deduped.some(h => h.uvIndex != null);
-      const daylight = hasUV ? deduped.filter(h => (h.uvIndex ?? 0) >= 1) : deduped;
+      let daylight = hasUV ? deduped.filter(h => (h.uvIndex ?? 0) >= 1) : deduped;
+      if (!daylight.length) {
+        // UV data present but all-zero (rainy day) — use 6 AM–9 PM Pacific as proxy for daylight
+        daylight = deduped.filter(h => {
+          const hr = toPacificHour(h.ts);
+          return hr >= 6 && hr <= 21;
+        });
+      }
       if (!daylight.length) continue;
 
       const bestScore = daylight.reduce((best, h) => {

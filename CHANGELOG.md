@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - **Historical air temp backfill** — on server startup, any daily summary missing `airTempF` or `uv` data is patched from the Open-Meteo ERA5 reanalysis archive (free, ~2-day lag)
 
 ### Fixed
+- **Rainy days missing from calendar** — Open-Meteo returns UV=0 (not null) on fully overcast/rainy days; the UV≥1 daylight filter produced an empty set and the day was silently skipped; now falls back to Pacific hour 6 AM–9 PM as daylight proxy when all UV values are 0
 - **Daylight filter timezone mismatch** — daily summary was storing hour field (`h`) as UTC (Railway container clock) while the client daylight filter compared against Pacific local sunrise/sunset; all three server callsites now use `toLocaleString('America/Los_Angeles')` to match `sunriseSunset()` in utils.js
 - **Daily summary date grouping** — date bucketing used UTC midnight, causing late-Pacific-evening hours to land on the wrong calendar day; now uses explicit Pacific timezone throughout
 - **Partial daily summary recovery** — server restart mid-day would write an incomplete summary (only UTC hours 0–N logged so far) and permanently lock out a rebuild; startup now detects entries with < 6 hours logged, drops them, and rebuilds on next cycle; a "skip today" guard prevents today's in-progress summary from being written prematurely
