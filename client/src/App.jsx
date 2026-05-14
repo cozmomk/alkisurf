@@ -112,9 +112,16 @@ function formatWindowTime(ts) {
     timeZone: 'America/Los_Angeles',
     hour: 'numeric', hour12: true,
   });
-  const isToday = new Date(ts).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })
-    === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-  return isToday ? `${timeStr} today` : `${timeStr} tomorrow`;
+  const toDate = t => new Date(t).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+  const hitDate      = toDate(ts);
+  const todayDate    = toDate(Date.now());
+  const tomorrowDate = toDate(Date.now() + 86400000);
+  if (hitDate === todayDate)    return `${timeStr} today`;
+  if (hitDate === tomorrowDate) return `${timeStr} tomorrow`;
+  const dayName = new Date(ts).toLocaleDateString('en-US', {
+    timeZone: 'America/Los_Angeles', weekday: 'long',
+  });
+  return `${timeStr} ${dayName}`;
 }
 
 function SmartBanner({ scores, forecast }) {
