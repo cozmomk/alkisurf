@@ -2,10 +2,10 @@ import { useRef, useEffect, useMemo } from 'react'; // useRef for scroll contain
 import { skyEmoji } from '../utils.js';
 
 const PX_PER_HR = 36;   // horizontal pixels per hour
-const H_TOTAL   = 148;  // total SVG height
+const H_TOTAL   = 152;  // total SVG height
 const H_EMOJI   = 28;   // top zone for sky emoji
 const H_LABEL   = 16;   // bottom zone for hour label
-const H_PRECIP  = 20;   // bottom zone for precip (stacked below label)
+const H_PRECIP  = 24;   // bottom zone for precip (two stacked lines)
 const H_CURVE   = H_TOTAL - H_EMOJI - H_LABEL - H_PRECIP; // middle curve zone
 const CURVE_TOP = H_EMOJI;
 const CURVE_BOT = H_EMOJI + H_CURVE;
@@ -181,10 +181,10 @@ export default function WeatherStrip({ forecast }) {
                 </text>
               )}
 
-              {/* Precip indicator */}
+              {/* Precip indicator — probability on line 1, amount on line 2 */}
               {showP && (
                 <g>
-                  <text x={x} y={CURVE_BOT + H_LABEL + H_PRECIP - 4} textAnchor="middle"
+                  <text x={x} y={CURVE_BOT + H_LABEL + 11} textAnchor="middle"
                     style={{
                       fontSize: 9,
                       fill: precip > 60 ? '#7ab8e8' : '#4a8aaa',
@@ -193,7 +193,7 @@ export default function WeatherStrip({ forecast }) {
                     💧{precip}%
                   </text>
                   {h.precipInPerHr != null && h.precipInPerHr > 0 && (
-                    <text x={x} y={CURVE_BOT + H_LABEL + H_PRECIP - 4} textAnchor="middle" dx={28}
+                    <text x={x} y={CURVE_BOT + H_LABEL + 22} textAnchor="middle"
                       style={{ fontSize: 8, fill: '#3a6a88' }}>
                       {h.precipInPerHr < 0.01 ? '<.01"' : `${h.precipInPerHr.toFixed(2)}"`}
                     </text>
