@@ -324,14 +324,15 @@ function drawMoon(ctx, x, y, r, phase, t) {
   ctx.restore();
 }
 
-function drawRainLines(ctx, drops, t, speed = 1, heavy = false, leanX = -1, speedMult = 1) {
+function drawRainLines(ctx, drops, t, speed = 1, heavy = false, leanX = -1, speedMult = 1, alphaScale = 1, lenScale = 1) {
   for (const d of drops) {
     const y = ((d.y + t * d.speed * speed * speedMult) % BOARD_Y + BOARD_Y) % BOARD_Y;
     const x = d.x + Math.sin(t * .45) * 5;
-    const a = heavy ? .3 + .2 * Math.sin(d.phase + t) : .45;
+    const baseA = heavy ? .3 + .2 * Math.sin(d.phase + t) : .45;
+    const a = Math.min(1, baseA * alphaScale);
     ctx.strokeStyle = `rgba(150,195,235,${a})`;
     ctx.lineWidth = heavy && d.heavy ? 1.4 : .85;
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + leanX, y + d.len); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + leanX * lenScale, y + d.len * lenScale); ctx.stroke();
   }
 }
 
@@ -719,6 +720,13 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
       const leanX         = dirX * windFactor * 16 - 1;
       const rainSpeedMult = 0.7 + windFactor * 0.6; // 0.7× calm → 1.3× full wind
 
+      // Rain intensity from precipInPerHr (0.25 in/hr = heavy PNW rain = max scale)
+      const pih = overlayRef.current.precipInPerHr ?? null;
+      const rainIntensity = pih != null ? Math.min(1, Math.max(0.1, pih / 0.25)) : 0.5;
+      const rainDropCount  = Math.round(20 + rainIntensity * 90);   // 20–110 drops
+      const rainAlphaScale = 0.4 + rainIntensity * 0.6;             // 0.4–1.0
+      const rainLenScale   = 0.7 + rainIntensity * 0.6;             // 0.7–1.3
+
       // Move all cloud banks with wind (dt-based so frame-rate independent)
       if (dt > 0) {
         const moveCloud = (c) => {
@@ -778,7 +786,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
 
       } else if (skyKey === 'rain') {
         for (const c of rainClouds) drawCloud(ctx, c.x, c.oy + 8, c.sc, c.a);
-        drawRainLines(ctx, rainDrops, t, 1, false, leanX, rainSpeedMult);
+        drawRainLines(ctx, rainDrops.slice(0, rainDropCount), t, 1, false, leanX, rainSpeedMult, rainAlphaScale, rainLenScale);
         const mist = ctx.createLinearGradient(0, BOARD_Y - 28, 0, BOARD_Y + tideOffset);
         mist.addColorStop(0, 'rgba(100,145,185,0)');
         mist.addColorStop(1, 'rgba(90,130,170,.1)');
@@ -787,7 +795,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
 
       } else if (skyKey === 'storm') {
         for (const c of stormClouds) drawCloud(ctx, c.x, c.oy + 4, c.sc, c.a);
-        drawRainLines(ctx, stormDrops, t, 1.5, true, leanX, rainSpeedMult);
+        drawRainLines(ctx, stormDrops.slice(0, Math.round(rainDropCount * 1.7)), t, 1.5, true, leanX, rainSpeedMult, rainAlphaScale, rainLenScale);
         if (!bolt.active && t > nextBoltT) {
           Object.assign(bolt, makeBolt());
           bolt.active = true; bolt.startT = t;
