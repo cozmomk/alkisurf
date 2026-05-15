@@ -11,10 +11,11 @@ export function skyEmoji(skyCover, ts) {
   return '☁️';
 }
 
-// Richer weather emoji using three priority layers:
+// Richer weather emoji using four priority layers:
 //   1. WMO thunderstorm codes (95-99) — always override, independent of NWS text
 //   2. NWS shortForecast text — most specific signal when available; returns early so
-//      WMO codes below 95 don't second-guess NWS ("Mostly Cloudy" stays cloudy)
+//      WMO codes below 95 don't second-guess NWS ("Mostly Cloudy" stays cloudy).
+//      Thunder is qualifier-aware: "Chance/Slight/Isolated" → 🌧️, definitive → ⛈️.
 //   3. WMO code fallback — fills in hours where NWS text is null (Open-Meteo covers
 //      gaps in NWS hourly coverage)
 //   4. skyEmoji baseline — cloud-cover-only fallback
@@ -32,7 +33,13 @@ export function conditionsEmoji(skyCover, shortForecast, ts, weatherCode = null)
       || lc.includes('sleet')   || lc.includes('wintry'))                          return '❄️';
     if (lc.includes('freezing') || lc.includes('frost')   || lc.includes('ice'))   return '🌨️';
     if (lc.includes('hail'))                                                        return '⛈️';
-    if (lc.includes('thunder')  || lc.includes('tstm'))                            return '⛈️';
+    if (lc.includes('thunder')  || lc.includes('tstm')) {
+      // Mirror sprite qualifier logic: hedged text ("Chance/Slight/Isolated Thunderstorms")
+      // shows rain 🌧️, not storm ⛈️. Only definitive text ("Thunderstorms Likely",
+      // "Thunderstorms") earns ⛈️. Prevents a 20-40% chance from appearing alarming.
+      const hasLowProbQualifier = lc.includes('chance') || lc.includes('slight') || lc.includes('isolated');
+      return hasLowProbQualifier ? '🌧️' : '⛈️';
+    }
     if (lc.includes('rain')     || lc.includes('shower')  || lc.includes('drizzle')) return '🌧️';
     // NWS says something benign (e.g. "Mostly Cloudy") — trust skyCover, skip WMO
     return skyEmoji(skyCover, ts);
