@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - **Rainy days missing from calendar** — Open-Meteo returns UV=0 (not null) on fully overcast/rainy days; the UV≥1 daylight filter produced an empty set and the day was silently skipped; now falls back to Pacific hour 6 AM–9 PM as daylight proxy when all UV values are 0
+- **Daily summary midnight scheduler timezone bug** — scheduler fired at UTC midnight (= 5 PM Pacific), at which point the Pacific date hadn't rolled over, so the "skip today" guard skipped yesterday's summary every night; now fires at 09:00 UTC (= 2 AM PDT / 1 AM PST), always past Pacific midnight
 - **Daylight filter timezone mismatch** — daily summary was storing hour field (`h`) as UTC (Railway container clock) while the client daylight filter compared against Pacific local sunrise/sunset; all three server callsites now use `toLocaleString('America/Los_Angeles')` to match `sunriseSunset()` in utils.js
 - **Daily summary date grouping** — date bucketing used UTC midnight, causing late-Pacific-evening hours to land on the wrong calendar day; now uses explicit Pacific timezone throughout
 - **Partial daily summary recovery** — server restart mid-day would write an incomplete summary (only UTC hours 0–N logged so far) and permanently lock out a rebuild; startup now detects entries with < 6 hours logged, drops them, and rebuilds on next cycle; a "skip today" guard prevents today's in-progress summary from being written prematurely

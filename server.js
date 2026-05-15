@@ -642,16 +642,20 @@ function buildDailySummary() {
   } catch (e) { console.error('[daily-summary]', e.message); }
 }
 
-// Schedule daily summary at midnight
+// Schedule daily summary at Pacific midnight.
+// Railway runs UTC. UTC midnight = 5 PM Pacific (PDT) — "today" in Pacific hasn't ended yet,
+// so the guard skips the current Pacific day and yesterday's summary never gets written.
+// Fix: fire at 09:00 UTC = 02:00 PDT / 01:00 PST — always past Pacific midnight.
 function scheduleMidnightSummary() {
   const now = new Date();
-  const midnight = new Date(now);
-  midnight.setHours(24, 0, 0, 0);
-  const msUntilMidnight = midnight - now;
+  const next = new Date(now);
+  next.setUTCHours(9, 0, 0, 0);          // 02:00 PDT / 01:00 PST
+  if (next <= now) next.setUTCDate(next.getUTCDate() + 1); // already past today's 09:00 UTC
+  const msUntil = next - now;
   setTimeout(() => {
     buildDailySummary();
     setInterval(buildDailySummary, 24 * 60 * 60 * 1000);
-  }, msUntilMidnight);
+  }, msUntil);
 }
 // Backfill historical temperature + UV into existing daily-summary hours[] using
 // Open-Meteo archive API (free, no key, ERA5 reanalysis, ~2-day lag).
