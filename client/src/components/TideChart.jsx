@@ -87,13 +87,24 @@ export default function TideChart({ currentFt, tideDirection, nextHilos, demo = 
 
   function toX(ts) { return PAD_L + (ts - startTime) / 3600000 * PX_PER_HR; }
 
-  // Build hilos: anchor just before startTime, then all nextHilos through +48h
+  // Build hilos: use the most-recent past hi-lo as left anchor when available (gives the
+  // cosine curve the correct shape), then all future events. Without the past event, the
+  // synthetic anchor at startTime compresses a long tidal cycle into a short window and the
+  // curve shoots to the wrong value at NOW (e.g. anchor -1.4 ft at 8 AM → 10.9 ft at 10:30 AM
+  // makes the curve show ~10 ft at 10 AM even though the actual low was at 3:27 AM).
   const hilos = useMemo(() => {
     if (demo) return buildDemoHilos();
-    const upcoming = (nextHilos ?? []).filter(h => h.ts > startTime);
-    if (!upcoming.length) return [];
-    const anchor = { type: 'anchor', ft: currentFt ?? upcoming[0].ft, ts: startTime };
-    return [anchor, ...upcoming.map(h => ({ type: h.type, ft: h.ft, ts: h.ts }))];
+    const all = nextHilos ?? [];
+    const future = all.filter(h => h.ts > now).map(h => ({ type: h.type, ft: h.ft, ts: h.ts }));
+    const pastEvent = [...all].filter(h => h.ts <= now).sort((a, b) => b.ts - a.ts)[0];
+    if (!future.length) return [];
+    if (pastEvent) {
+      // Use real past hi-lo as left anchor — correct cosine shape across the full cycle
+      return [{ type: pastEvent.type, ft: pastEvent.ft, ts: pastEvent.ts }, ...future];
+    }
+    // No past event: fall back to synthetic anchor at startTime with currentFt
+    const anchor = { type: 'anchor', ft: currentFt ?? future[0].ft, ts: startTime };
+    return [anchor, ...future];
   }, [nextHilos, currentFt, now, demo]);
 
   const displayFt  = demo ? 2.3 : (currentFt ?? null);

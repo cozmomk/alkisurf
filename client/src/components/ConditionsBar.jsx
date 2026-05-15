@@ -145,7 +145,7 @@ export default function ConditionsBar({
     );
   }
 
-  const nextHilo = nextHilos?.[0];
+  const nextHilo = (nextHilos ?? []).find(h => h.ts > Date.now());
   const tideStr = current.tideCurrentFt != null ? `${current.tideCurrentFt.toFixed(1)} ft` : '—';
 
   const windStr = current.windSpeedKt != null
