@@ -40,7 +40,14 @@ export function conditionsEmoji(skyCover, shortForecast, ts, weatherCode = null)
       const hasLowProbQualifier = lc.includes('chance') || lc.includes('slight') || lc.includes('isolated');
       return hasLowProbQualifier ? '🌧️' : '⛈️';
     }
-    if (lc.includes('rain')     || lc.includes('shower')  || lc.includes('drizzle')) return '🌧️';
+    if (lc.includes('rain')     || lc.includes('shower')  || lc.includes('drizzle')) {
+      // Mirror thunder qualifier logic: hedged text ("Slight Chance/Chance Light Rain")
+      // shows cloud, not rain. Only definitive text ("Rain", "Showers Likely") earns 🌧️.
+      // NWS: "Slight Chance" = 10–20%, "Chance" = 30–50% — below the "probably raining"
+      // threshold. No qualifier or "Likely" (60–70%) is definitive enough for a rain icon.
+      const hasLowProbQualifier = lc.includes('chance') || lc.includes('slight');
+      return hasLowProbQualifier ? skyEmoji(skyCover, ts) : '🌧️';
+    }
     // NWS says something benign (e.g. "Mostly Cloudy") — trust skyCover, skip WMO
     return skyEmoji(skyCover, ts);
   }
