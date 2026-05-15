@@ -1,4 +1,4 @@
-import { scoreColor, skyEmoji, uvColor, uvLabel, compassLabel } from '../utils.js';
+import { scoreColor, conditionsEmoji, uvColor, uvLabel, compassLabel } from '../utils.js';
 
 function ptDayKey(ts) {
   return new Date(ts).toLocaleDateString('en-CA', {
@@ -61,7 +61,9 @@ function summarizeDay(dayKey, hours, bestWindows) {
     uvPeak: uvs.length ? Math.round(Math.max(...uvs)) : null,
     precipMax: precips.length ? Math.round(Math.max(...precips)) : null,
     precipAmtMax: precipAmts.length ? Math.max(...precipAmts) : null,
-    skyCover: noonHour?.skyCover ?? null,
+    skyCover:      noonHour?.skyCover      ?? null,
+    shortForecast: noonHour?.shortForecast ?? null,
+    weatherCode:   noonHour?.weatherCode   ?? null,
     ts: noonHour?.time ?? hours[0]?.time,
     bestWin,
     northWin,
@@ -81,8 +83,8 @@ function fmtSunTime(ts) {
 }
 
 function DayCard({ summary, isFirst, isSecond }) {
-  const { highF, lowF, windMin, windMax, gustPeak, windDir, uvPeak, precipMax, precipAmtMax, skyCover, ts, bestWin, northWin, southWin, sunriseTs, sunsetTs } = summary;
-  const sky = skyEmoji(skyCover, ts);
+  const { highF, lowF, windMin, windMax, gustPeak, windDir, uvPeak, precipMax, precipAmtMax, skyCover, shortForecast, weatherCode, ts, bestWin, northWin, southWin, sunriseTs, sunsetTs } = summary;
+  const sky = conditionsEmoji(skyCover, shortForecast, ts, weatherCode);
   const hasWindow = bestWin != null;
   const label = isFirst ? 'Today' : isSecond ? 'Tomorrow' : fmt(ts, { weekday: 'short' });
   const dateStr = fmt(ts, { month: 'short', day: 'numeric' });

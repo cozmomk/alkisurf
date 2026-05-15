@@ -11,20 +11,49 @@ export function skyEmoji(skyCover, ts) {
   return '☁️';
 }
 
-// Like skyEmoji but fog/smoke/haze from NWS shortForecast text takes priority.
-// Pass weatherCode (Open-Meteo WMO code) so WMO-detected thunderstorms (≥95) show ⛈️
-// even when NWS shortForecast text doesn't include "thunder".
+// Richer weather emoji using three priority layers:
+//   1. WMO thunderstorm codes (95-99) — always override, independent of NWS text
+//   2. NWS shortForecast text — most specific signal when available; returns early so
+//      WMO codes below 95 don't second-guess NWS ("Mostly Cloudy" stays cloudy)
+//   3. WMO code fallback — fills in hours where NWS text is null (Open-Meteo covers
+//      gaps in NWS hourly coverage)
+//   4. skyEmoji baseline — cloud-cover-only fallback
 export function conditionsEmoji(skyCover, shortForecast, ts, weatherCode = null) {
-  // WMO codes 95–99 = thunderstorm (Open-Meteo primary signal, independent of NWS text)
-  if (weatherCode != null && weatherCode >= 95) return '⛈️';
+  // Layer 1: WMO thunder always wins regardless of NWS text
+  if (weatherCode != null && weatherCode >= 95) return '⛈️'; // 95-99: thunderstorm
+
   if (shortForecast) {
+    // Layer 2: NWS text (priority order matters — fog before freezing, snow before rain,
+    //          thunder before rain so "Showers And Thunderstorms" → ⛈️ not 🌧️)
     const lc = shortForecast.toLowerCase();
-    if (lc.includes('fog') || lc.includes('mist'))  return '🌫️';
-    if (lc.includes('smoke') || lc.includes('haze')) return '🌫️';
-    if (lc.includes('snow') || lc.includes('blizzard')) return '❄️';
-    if (lc.includes('thunder') || lc.includes('tstm')) return '⛈️';
-    if (lc.includes('rain') || lc.includes('shower') || lc.includes('drizzle')) return '🌧️';
+    if (lc.includes('fog')      || lc.includes('mist'))                            return '🌫️';
+    if (lc.includes('smoke')    || lc.includes('haze'))                            return '🌫️';
+    if (lc.includes('snow')     || lc.includes('blizzard') || lc.includes('flurr')
+      || lc.includes('sleet')   || lc.includes('wintry'))                          return '❄️';
+    if (lc.includes('freezing') || lc.includes('frost')   || lc.includes('ice'))   return '🌨️';
+    if (lc.includes('hail'))                                                        return '⛈️';
+    if (lc.includes('thunder')  || lc.includes('tstm'))                            return '⛈️';
+    if (lc.includes('rain')     || lc.includes('shower')  || lc.includes('drizzle')) return '🌧️';
+    // NWS says something benign (e.g. "Mostly Cloudy") — trust skyCover, skip WMO
+    return skyEmoji(skyCover, ts);
   }
+
+  // Layer 3: WMO fallback for hours with no NWS shortForecast text
+  if (weatherCode != null) {
+    if (weatherCode >= 85) return '❄️';   // 85-86: snow showers
+    if (weatherCode >= 80) return '🌧️';  // 80-82: rain showers
+    if (weatherCode >= 77) return '❄️';   // 77: snow grains
+    if (weatherCode >= 71) return '❄️';   // 71-75: snow (slight/moderate/heavy)
+    if (weatherCode >= 66) return '🌨️';  // 66-67: freezing rain
+    if (weatherCode >= 61) return '🌧️';  // 61-65: rain (slight/moderate/heavy)
+    if (weatherCode >= 56) return '🌨️';  // 56-57: freezing drizzle
+    if (weatherCode >= 51) return '🌧️';  // 51-55: drizzle (light/moderate/dense)
+    if (weatherCode >= 45) return '🌫️';  // 45-48: fog / depositing rime fog
+    // 0-44: clear sky (0), mainly clear (1), partly cloudy (2), overcast (3),
+    //       or unusual codes — fall through to skyCover baseline
+  }
+
+  // Layer 4: cloud cover only
   return skyEmoji(skyCover, ts);
 }
 

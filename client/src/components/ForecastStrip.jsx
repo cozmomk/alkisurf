@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { scoreColor, compassLabel, skyEmoji, uvColor } from '../utils.js';
+import { scoreColor, compassLabel, conditionsEmoji, uvColor } from '../utils.js';
 
 function fmt(ts, opts) {
   return new Date(ts).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', ...opts });
@@ -46,7 +46,7 @@ function Cell({ hour }) {
     ? hour.actual.windSpeedKt
     : hour.windSpeedKt;
 
-  const sky = skyEmoji(hour.skyCover, hour.time);
+  const sky = conditionsEmoji(hour.skyCover, hour.shortForecast, hour.time, hour.weatherCode);
   const uv = hour.uvIndex != null ? Math.round(hour.uvIndex) : null;
   const precip = hour.precipProbability != null ? Math.round(hour.precipProbability) : null;
   const cloud = hour.skyCover != null ? Math.round(hour.skyCover) : null;

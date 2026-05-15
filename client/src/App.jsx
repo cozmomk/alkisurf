@@ -104,6 +104,7 @@ function findNextGlassWindow(forecast) {
     airTempF:      hit.airTempF ?? null,
     skyCover:      hit.skyCover ?? null,
     shortForecast: hit.shortForecast ?? null,
+    weatherCode:   hit.weatherCode ?? null,
   };
 }
 
@@ -174,7 +175,7 @@ function SmartBanner({ scores, forecast }) {
   const win = findNextGlassWindow(forecast);
   if (!win) return null;
 
-  const wxEmoji  = conditionsEmoji(win.skyCover, win.shortForecast, win.ts);
+  const wxEmoji  = conditionsEmoji(win.skyCover, win.shortForecast, win.ts, win.weatherCode);
   const tempStr  = win.airTempF != null ? ` · ${wxEmoji ?? ''} ${Math.round(win.airTempF)}°F` : (wxEmoji ? ` · ${wxEmoji}` : '');
   const winLabel = win.side === 'north' ? 'N' : 'S';
   const timeStr  = formatWindowTime(win.ts);

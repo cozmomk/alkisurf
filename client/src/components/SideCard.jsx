@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { scoreColor, compassLabel, skyEmoji, uvColor, uvLabel, computeTrend } from '../utils.js';
+import { scoreColor, compassLabel, conditionsEmoji, uvColor, uvLabel, computeTrend } from '../utils.js';
 
 // Solve for effective wind speed needed to hit a target score given current waveFactor
 function windForScore(target, waveFactor) {
@@ -142,7 +142,7 @@ export default function SideCard({ side, data, windDirDeg, forecast, airTempF, w
   const trend = computeTrend(side, score, forecast);
   const now = Date.now();
   const nextHour = (forecast || []).find(h => h.time > now);
-  const sky = skyEmoji(nextHour?.skyCover, nextHour?.time);
+  const sky = conditionsEmoji(nextHour?.skyCover, nextHour?.shortForecast, nextHour?.time, nextHour?.weatherCode);
   const uv = nextHour?.uvIndex != null ? Math.round(nextHour.uvIndex) : null;
 
   const trendDir = trend?.direction;
