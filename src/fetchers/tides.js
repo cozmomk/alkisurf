@@ -6,11 +6,17 @@ const BASE = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter';
 const STATION = '9447130';
 const WTEMP_STATION = '9446484'; // Tacoma — same body of water, has temp sensor
 
+// ─── IMPORTANT: use time_zone:'gmt' so NOAA returns UTC timestamps ──────────
+// NOAA returns times as "YYYY-MM-DD HH:MM" with no timezone indicator.
+// If we request lst_ldt (Pacific local), new Date("2026-05-15 10:30") is
+// parsed as LOCAL time by JS — correct on a Pacific dev machine, but 7 hours
+// wrong on Railway's UTC server. Requesting gmt gives UTC times, which we
+// then parse with an explicit 'Z' suffix so they're unambiguous on any host.
 function params(extra) {
   return new URLSearchParams({
     station: STATION,
     datum: 'MLLW',
-    time_zone: 'lst_ldt',
+    time_zone: 'gmt',   // ← UTC timestamps — safe to parse on any server
     units: 'english',
     application: 'alkisurf',
     format: 'json',
@@ -22,7 +28,7 @@ function wtempParams() {
   return new URLSearchParams({
     station: WTEMP_STATION,
     datum: 'MLLW',
-    time_zone: 'lst_ldt',
+    time_zone: 'gmt',
     units: 'english',
     application: 'alkisurf',
     format: 'json',
@@ -31,17 +37,24 @@ function wtempParams() {
   }).toString();
 }
 
+// Parse a NOAA UTC timestamp string ("YYYY-MM-DD HH:MM") to a Unix ms value.
+// Appending 'Z' forces UTC interpretation regardless of the host's local timezone.
+function parseNoaaTs(t) {
+  return new Date(t.replace(' ', 'T') + 'Z').getTime();
+}
+
 function nowStr() {
   const d = new Date();
   const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+  // Use UTC date to match the gmt time_zone — begin_date is a UTC calendar date.
+  return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}`;
 }
 
-// Hours needed from midnight-today to cover now + 48h chart window + 4h buffer.
-// range starts at midnight, so we add however many hours have already elapsed today.
+// Hours needed from UTC midnight-today to cover now + 48h chart window + 4h buffer.
 function rangeHours() {
   const now = new Date();
-  const hoursElapsed = now.getHours() + now.getMinutes() / 60;
+  // UTC hours elapsed since UTC midnight (matches gmt begin_date)
+  const hoursElapsed = now.getUTCHours() + now.getUTCMinutes() / 60;
   return Math.ceil(hoursElapsed + 52); // 48h chart + 4h buffer
 }
 
@@ -57,42 +70,25 @@ export async function fetchTideData(fetchFn) {
     levelRes.json(), predRes.json(), hiloRes.json(), wtempRes.json()
   ]);
 
-  // Hourly predictions for the next 48h (built first — used for live-reading sanity check)
+  // Current water level (the .v value is independent of timezone — just feet)
+  const levelData = levelJson.data?.[0];
+  const currentFt = levelData ? parseFloat(levelData.v) : null;
+
+  // Hourly predictions for the next 48h
   const hourly = (predJson.predictions || []).map(p => ({
-    ts: new Date(p.t).getTime(),
+    ts: parseNoaaTs(p.t),   // UTC timestamp, unambiguous on any host
     ft: parseFloat(p.v),
   }));
 
   // Hi/lo events
   const hilos = (hiloJson.predictions || []).map(p => ({
-    ts: new Date(p.t).getTime(),
+    ts: parseNoaaTs(p.t),   // UTC timestamp, unambiguous on any host
     ft: parseFloat(p.v),
     type: p.type, // H or L
   }));
 
-  // Current water level — with staleness / sanity fallback.
-  // NOAA's 'date: latest' can return hours-old data during sensor outages or verification delays.
-  // If the live reading differs > 2 ft from the nearest hourly prediction, it's almost certainly
-  // stale (tides change at most ~1.5 ft/hr; predictions are accurate to ~0.1 ft). Fall back to
-  // the prediction so the pill, gauge, and chart dot all reflect reality.
-  const levelData = levelJson.data?.[0];
-  let currentFt = levelData ? parseFloat(levelData.v) : null;
-  if (currentFt != null && hourly.length > 0) {
-    const now = Date.now();
-    const nearest = hourly.reduce((best, p) =>
-      Math.abs(p.ts - now) < Math.abs(best.ts - now) ? p : best
-    );
-    if (Math.abs(currentFt - nearest.ft) > 2) {
-      console.warn(
-        `[tides] Live reading ${currentFt.toFixed(2)} ft differs >${2} ft from ` +
-        `prediction ${nearest.ft.toFixed(2)} ft — treating as stale, using prediction`
-      );
-      currentFt = nearest.ft;
-    }
-  }
-
   // Tide rate: ft/hr at current time, using the two hourly predictions that bracket NOW.
-  // (Avoid hourly[0]-hourly[1] which is the midnight-to-1am rate, not the current rate.)
+  // (Don't use hourly[0]→hourly[1] which is the UTC-midnight-to-1am rate, not current.)
   let tideRateFtHr = 0;
   if (hourly.length >= 2) {
     const now = Date.now();
@@ -101,7 +97,6 @@ export async function fetchTideData(fetchFn) {
     if (before && after) {
       tideRateFtHr = (after.ft - before.ft) / ((after.ts - before.ts) / 3600000);
     } else {
-      // Fallback: first two hourly slots
       tideRateFtHr = hourly[1].ft - hourly[0].ft;
     }
   }
