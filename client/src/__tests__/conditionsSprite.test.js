@@ -28,6 +28,13 @@ describe('skyFromData (daytime)', () => {
   it('returns storm for thunder in forecast text', () => {
     expect(skyFromData(5, 20, 'Thunderstorms likely', null)).toBe('storm');
   });
+  it('does NOT return storm for slight chance thunderstorms (low prob)', () => {
+    expect(skyFromData(5, 80, 'Slight Chance Thunderstorms', 20)).toBe('overcast');
+    expect(skyFromData(5, 80, 'Chance Thunderstorms', 40)).toBe('overcast');
+  });
+  it('returns storm for chance thunderstorms when prob > 50', () => {
+    expect(skyFromData(5, 80, 'Chance Thunderstorms', 60)).toBe('storm');
+  });
   it('returns rain when forecast text includes rain', () => {
     expect(skyFromData(5, 20, 'Chance of rain showers', null)).toBe('rain');
   });

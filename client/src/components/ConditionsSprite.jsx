@@ -399,7 +399,14 @@ export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbabil
   const isRaining = /rain|shower|drizzle/.test(forecastText) || (precipProbability != null && precipProbability > 50);
   const isSnowing = /snow|flurr|blizzard|sleet|wintry/.test(forecastText)
     || (airTempF != null && airTempF < 34 && isRaining);
-  const isThunder = /thunder/.test(forecastText);
+  // Only show storm when thunder is likely — "Slight Chance Thunderstorms" (20% prob) should not
+  // trigger the storm state. Gate on precipProbability > 50 when available, or require
+  // the text to be unqualified (no "chance" or "slight" modifier).
+  const hasThunderText = /thunder/.test(forecastText);
+  const thunderIsLikely = precipProbability != null
+    ? precipProbability > 50
+    : hasThunderText && !/chance|slight/.test(forecastText);
+  const isThunder = hasThunderText && thunderIsLikely;
   if (isThunder) return 'storm';
   if (isSnowing) return 'snow';
   if (skyCover == null) return isRaining ? 'rain' : 'sunny';
