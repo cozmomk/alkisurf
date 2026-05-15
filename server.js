@@ -360,10 +360,11 @@ async function buildConditions() {
 
   const bestWindows = findBestWindows(forecastHours);
 
-  // Next hi/lo tide events
-  const nextHilos = (tideData?.hilos || [])
-    .filter(h => h.ts > now)
-    .slice(0, 4);
+  // Next hi/lo tide events — include last past event so client can bracket current tide
+  const allHilos = tideData?.hilos || [];
+  const pastHilos   = allHilos.filter(h => h.ts <= now);
+  const futureHilos = allHilos.filter(h => h.ts > now).slice(0, 4);
+  const nextHilos   = [...pastHilos.slice(-1), ...futureHilos];
 
   const nearestUVNow = uvData.length ? uvData.reduce((best, u) =>
     Math.abs(u.ts - now) < Math.abs((best?.ts ?? Infinity) - now) ? u : best, null) : null;

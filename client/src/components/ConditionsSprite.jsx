@@ -413,12 +413,17 @@ const SKY_LABELS = { sunny: 'Sunny', partly: 'Partly cloudy', overcast: 'Overcas
 
 function realTidePct(currentFt, hilos) {
   if (currentFt == null || !hilos?.length) return null;
-  const nextH = hilos.find(h => h.type === 'H');
-  const nextL = hilos.find(h => h.type === 'L');
-  if (!nextH || !nextL) return null;
-  const range = nextH.ft - nextL.ft;
+  const now = Date.now();
+  // Find the hi-lo events bracketing now: most-recent past + soonest future
+  const past   = [...hilos].filter(h => h.ts <= now).sort((a, b) => b.ts - a.ts)[0]; // last past
+  const future = [...hilos].filter(h => h.ts > now).sort((a, b) => a.ts - b.ts)[0];  // next future
+  if (!past || !future) return null;
+  const range = Math.abs(future.ft - past.ft);
   if (range <= 0) return null;
-  return Math.max(0, Math.min(1, (currentFt - nextL.ft) / range));
+  // Linear interpolation: 0 at the lower bound, 1 at the upper bound
+  const lo = Math.min(past.ft, future.ft);
+  const hi = Math.max(past.ft, future.ft);
+  return Math.max(0, Math.min(1, (currentFt - lo) / (hi - lo)));
 }
 
 // ─── cloud scroll helper ──────────────────────────────────────────────────────
