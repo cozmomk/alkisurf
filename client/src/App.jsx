@@ -320,6 +320,7 @@ export default function App() {
               skyCover={currentForecast?.skyCover ?? null}
               shortForecast={currentForecast?.shortForecast ?? null}
               precipProbability={currentForecast?.precipProbability ?? null}
+              weatherCode={currentForecast?.weatherCode ?? null}
               uvIndex={currentForecast?.uvIndex ?? null}
               precipInPerHr={currentForecast?.precipInPerHr ?? null}
               waterTempF={current?.waterTempF ?? null}
@@ -343,6 +344,7 @@ export default function App() {
               scores={scores}
               skyCover={currentForecast?.skyCover ?? null}
               shortForecast={currentForecast?.shortForecast ?? null}
+              weatherCode={currentForecast?.weatherCode ?? null}
             />
           </div>
         )}

@@ -61,6 +61,27 @@ describe('skyFromData (daytime)', () => {
     expect(skyFromData(20, 5, null, null)).toBe('sunny');
     expect(skyFromData(30, 5, null, null)).toBe('sunny');
   });
+
+  // WMO weather code tests (8th argument)
+  it('returns storm for WMO code 95 (thunderstorm) even with no NWS thunder text', () => {
+    expect(skyFromData(5, 100, 'Rain', 48, null, null, null, 95)).toBe('storm');
+  });
+  it('returns storm for WMO codes 96 and 99', () => {
+    expect(skyFromData(5, 100, null, null, null, null, null, 96)).toBe('storm');
+    expect(skyFromData(5, 100, null, null, null, null, null, 99)).toBe('storm');
+  });
+  it('does NOT return storm for WMO code 82 (rain showers, no thunder)', () => {
+    expect(skyFromData(5, 100, null, 60, null, null, null, 82)).toBe('rain');
+  });
+  it('does NOT return storm for WMO code 94 (just below thunderstorm threshold)', () => {
+    expect(skyFromData(5, 100, 'Chance Showers And Thunderstorms', 48, null, null, null, 94)).toBe('rain');
+  });
+  it('weatherCode=null falls back to NWS text+probability logic', () => {
+    // null weatherCode, low probability — no storm
+    expect(skyFromData(5, 100, 'Chance Showers And Thunderstorms', 48, null, null, null, null)).toBe('rain');
+    // null weatherCode, high probability — storm
+    expect(skyFromData(5, 100, 'Showers And Thunderstorms Likely', 59, null, null, null, null)).toBe('storm');
+  });
 });
 
 describe('skyFromData (nighttime)', () => {

@@ -5,7 +5,7 @@ const LAT = 47.58;
 const LON = -122.42;
 
 export async function fetchUVData(fetchFn) {
-  const url = `${BASE}?latitude=${LAT}&longitude=${LON}&hourly=uv_index,precipitation,cloud_cover,wind_gusts_10m&wind_speed_unit=ms&timezone=UTC&forecast_days=3`;
+  const url = `${BASE}?latitude=${LAT}&longitude=${LON}&hourly=uv_index,precipitation,cloud_cover,wind_gusts_10m,weather_code&wind_speed_unit=ms&timezone=UTC&forecast_days=3`;
   const res = await fetchFn(url, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`Open-Meteo UV failed: ${res.status}`);
   const json = await res.json();
@@ -19,5 +19,8 @@ export async function fetchUVData(fetchFn) {
     windGustKt: h.wind_gusts_10m?.[i] != null        // m/s → kt
       ? Math.round(h.wind_gusts_10m[i] * 1.944)
       : null,
+    // WMO weather code: 95–99 = thunderstorm, 80–82 = showers, 61–67 = rain, etc.
+    // Separates thunder from rain independently of precipProbability.
+    weatherCode: h.weather_code?.[i] ?? null,
   }));
 }

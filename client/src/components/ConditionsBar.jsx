@@ -131,7 +131,7 @@ function GlassPanel({ scores }) {
 export default function ConditionsBar({
   current, nextHilos, uvIndex, precipInPerHr, precipProbability,
   sunriseTs, sunsetTs, forecast, scores,
-  skyCover, shortForecast,
+  skyCover, shortForecast, weatherCode,
 }) {
   const [activePanel, setActivePanel] = useState('glass');
 

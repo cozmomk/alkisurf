@@ -350,6 +350,8 @@ async function buildConditions() {
         precipInPerHr: nearestUV?.precipMmHr != null ? nearestUV.precipMmHr / 25.4 : null,
         windGustKt: nearestUV?.windGustKt ?? h.windGustKt ?? null,
         waveHeightFt: nearestMarine?.waveHeightM != null ? nearestMarine.waveHeightM * 3.281 : null,
+        // WMO weather code from Open-Meteo (95+ = thunderstorm, independent of precipProbability)
+        weatherCode: nearestUV?.weatherCode ?? null,
         sides,
         actual,
       };
