@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo } from 'react'; // useRef for scroll container
-import { skyEmoji } from '../utils.js';
+import { conditionsEmoji } from '../utils.js';
 
 const PX_PER_HR = 36;   // horizontal pixels per hour
 const H_TOTAL   = 152;  // total SVG height
@@ -137,7 +137,7 @@ export default function WeatherStrip({ forecast }) {
 
         {/* Per-hour elements */}
         {pts.map(({ x, y, h, i, isPast }) => {
-          const sky    = skyEmoji(h.skyCover, h.time);
+          const sky    = conditionsEmoji(h.skyCover, h.shortForecast, h.time, h.weatherCode);
           const temp   = h.airTempF != null ? Math.round(h.airTempF) : null;
           const precip = h.precipProbability != null ? Math.round(h.precipProbability) : null;
           const showP  = precip != null && precip >= 10;
