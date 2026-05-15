@@ -13,6 +13,23 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.json" />
     <title>Alki Surf — Puget Sound Conditions</title>
+
+    <!-- Google Analytics 4 ─────────────────────────────────────────────────
+         Set VITE_GA_ID=G-XXXXXXXXXX in Railway → Variables before deploy.
+         Vite replaces %VITE_GA_ID% at build time. If the var is absent the
+         script still loads but gtag('config') points to an empty string and
+         does nothing harmful. ─────────────────────────────────────────────-->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=%VITE_GA_ID%"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '%VITE_GA_ID%', {
+        // Don't send page_view on load — we fire it manually after hydration
+        // so the score data is available as a custom dimension.
+        send_page_view: false,
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>

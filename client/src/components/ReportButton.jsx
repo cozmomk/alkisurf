@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { track } from '../analytics.js';
 
 const RATINGS = [
   { key: 'glass',  label: 'Glass',       emoji: '🪟', color: '#00e887' },
@@ -26,8 +27,13 @@ export default function ReportButton() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rating, side: side.toLowerCase(), note }),
       });
-      setStatus(res.ok ? 'done' : 'error');
-      if (res.ok) setTimeout(() => { setOpen(false); reset(); }, 1400);
+      if (res.ok) {
+        track('report_submitted', { rating, side: side.toLowerCase() });
+        setStatus('done');
+        setTimeout(() => { setOpen(false); reset(); }, 1400);
+      } else {
+        setStatus('error');
+      }
     } catch {
       setStatus('error');
     }
@@ -40,7 +46,7 @@ export default function ReportButton() {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => { setOpen(true); track('report_opened'); }}
         className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
         style={{
           background: 'rgba(255,255,255,0.04)',

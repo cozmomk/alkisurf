@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Component } from 'react';
+import { useState, useEffect, useCallback, useRef, Component } from 'react';
 
 export class ErrorBoundary extends Component {
   state = { err: null };
@@ -24,6 +24,7 @@ import InsightsPanel from './components/InsightsPanel.jsx';
 import SurfHistory from './components/GlassCalendar.jsx';
 import CSOWarning from './components/CSOWarning.jsx';
 import { conditionsEmoji, scoreColor } from './utils.js';
+import { track, trackPageView } from './analytics.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 const POLL_MS = 5 * 60 * 1000; // 5 minutes
@@ -202,6 +203,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);
   const [godMode, setGodMode] = useState(false);
+  const hasTrackedPageView = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -210,6 +212,20 @@ export default function App() {
       const json = await res.json();
       setData(json);
       setError(null);
+
+      // Analytics — fire page_view once, then conditions_loaded on each refresh
+      const sc = json?.current?.scores;
+      if (sc) {
+        const northScore = sc.north?.score ?? 0;
+        const southScore = sc.south?.score ?? 0;
+        const bestScore  = Math.max(northScore, southScore);
+        if (!hasTrackedPageView.current) {
+          hasTrackedPageView.current = true;
+          trackPageView({ northScore, southScore, bestScore });
+        } else {
+          track('conditions_loaded', { north_score: northScore, south_score: southScore, best_score: bestScore });
+        }
+      }
     } catch (e) {
       setError(e.message);
     } finally {

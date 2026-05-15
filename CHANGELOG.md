@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] → 1.3.0
 
 ### Added
+- **Google Analytics 4** — GA4 tracking via `VITE_GA_ID` Railway env var; fires `page_view` (with north/south/best scores) on first load, `conditions_loaded` on each refresh, `report_opened` and `report_submitted` (with rating + side) on user reports; no-ops gracefully when GA is blocked or the env var is absent
 - **Rain animation intensity** — ConditionsSprite rain/storm drop count, opacity, and streak length now scale with live `precipInPerHr` data; light drizzle shows ~20 sparse faint streaks, heavy rain shows up to 110 dense bright streaks (0.25 in/hr = max scale for PNW)
 - **CSO water quality warning** — real-time banner when King County reports a Combined Sewer Overflow near Alki Beach; red for active overflow, orange for overflow within last 48 hours; shows outfall name and distance; polls every 10 minutes; links to King County's official status page
 - **DayMiniChart** — hourly score chart in the calendar detail panel replacing static stat cards; cubic bezier smooth lines, separate North (blue) and South (amber) lines when available, glass window shading (green bands for score ≥ 7), 2-hour tick grid, glass window legend
