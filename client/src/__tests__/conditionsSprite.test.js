@@ -98,6 +98,27 @@ describe('skyFromData (daytime)', () => {
     // null weatherCode, high probability — storm
     expect(skyFromData(5, 100, 'Showers And Thunderstorms Likely', 59, null, null, null, null)).toBe('storm');
   });
+
+  // modelSaysDry gate: WMO < 45 (no precip codes) AND precipInPerHr = 0 → trust model, suppress rain/thunder
+  it('suppresses storm when WMO says overcast (code 3) and precip is 0, even with "Likely" text', () => {
+    // Real scenario: "Showers And Thunderstorms Likely" at 67% but WMO=3 (overcast) and 0"/hr
+    expect(skyFromData(5, 100, 'Showers And Thunderstorms Likely', 67, null, null, null, 3, 0)).toBe('overcast');
+  });
+  it('suppresses rain when WMO says overcast and precip is 0, even with definitive rain text', () => {
+    // skyCover=50 → 36–70 bracket → 'overcast' (not rain) when modelSaysDry
+    expect(skyFromData(5, 50, 'Rain Showers Likely', 60, null, null, null, 3, 0)).toBe('overcast');
+  });
+  it('does NOT suppress storm when precipInPerHr is null (missing Open-Meteo data)', () => {
+    // Missing precip data → modelSaysDry=false → fall back to NWS text (definitive = storm)
+    expect(skyFromData(5, 100, 'Showers And Thunderstorms Likely', 67, null, null, null, 3, null)).toBe('storm');
+  });
+  it('does NOT suppress storm when WMO code is null (no Open-Meteo code)', () => {
+    expect(skyFromData(5, 100, 'Showers And Thunderstorms Likely', 67, null, null, null, null, 0)).toBe('storm');
+  });
+  it('WMO thunderstorm codes (95+) always show storm, overriding modelSaysDry check', () => {
+    // WMO 95 is >= 45, so modelSaysDry is false even with 0 precip
+    expect(skyFromData(5, 100, null, null, null, null, null, 95, 0)).toBe('storm');
+  });
 });
 
 describe('skyFromData (nighttime)', () => {

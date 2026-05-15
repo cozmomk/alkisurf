@@ -391,12 +391,24 @@ function isNightNow(sunriseTs, sunsetTs) {
   return hour >= 20 || hour < 6;
 }
 
-export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbability, airTempF, sunriseTs, sunsetTs, weatherCode) {
+export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbability, airTempF, sunriseTs, sunsetTs, weatherCode, precipInPerHr = null) {
   if (isNightNow(sunriseTs, sunsetTs)) return 'night';
   const forecastText = (shortForecast || '').toLowerCase();
   // God Mode can force night by setting shortForecast to exactly "Night"
   if (forecastText === 'night') return 'night';
-  const isRaining = /rain|shower|drizzle/.test(forecastText) || (precipProbability != null && precipProbability > 50);
+
+  // Model dry-override: if WMO says "no precipitation" (code < 45 = clear/cloudy)
+  // AND Open-Meteo measures zero precip, trust the model over NWS text probability.
+  // This prevents "Showers And Thunderstorms Likely" from showing storm when the
+  // numerical model sees only overcast and 0"/hr — NWS text reflects uncertainty,
+  // not the model's best deterministic estimate.
+  // Only applies when BOTH signals confirm dry (never suppresses when either is missing).
+  const modelSaysDry = weatherCode != null && weatherCode < 45
+    && precipInPerHr != null && precipInPerHr <= 0.01;
+
+  const isRaining = !modelSaysDry && (
+    /rain|shower|drizzle/.test(forecastText) || (precipProbability != null && precipProbability > 50)
+  );
   const isSnowing = /snow|flurr|blizzard|sleet|wintry/.test(forecastText)
     || (airTempF != null && airTempF < 34 && isRaining);
 
@@ -404,17 +416,17 @@ export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbabil
   // 1. Open-Meteo WMO weather code 95–99 = thunderstorm (separate from rain probability)
   //    95: slight/moderate, 96: with slight hail, 99: with heavy hail
   // 2. NWS shortForecast text logic (when weatherCode unavailable):
+  //    - modelSaysDry gate: if WMO < 45 and precip = 0, suppress thunder from text
   //    - Low-probability qualifiers ("Chance", "Slight Chance", "Isolated") → require precipProbability > 50%
   //      because NWS precipProbability bundles rain + thunder and can't separate them
-  //    - Definitive text ("Thunderstorms", "Thunderstorms Likely") → show storm regardless of precipProbability
-  //      because the forecaster is committing to the event, not hedging
+  //    - Definitive text ("Thunderstorms", "Thunderstorms Likely") → show storm (unless modelSaysDry)
   const thunderByCode = weatherCode != null && weatherCode >= 95;
   const hasThunderText = /thunder/.test(forecastText);
   const hasLowProbQualifier = /chance|slight|isolated/.test(forecastText); // NWS hedging words
-  const thunderByText = hasThunderText && (
+  const thunderByText = hasThunderText && !modelSaysDry && (
     hasLowProbQualifier
       ? (precipProbability != null && precipProbability > 50) // gated: prob must be high
-      : true                                                  // definitive forecast: always storm
+      : true                                                  // definitive forecast: storm (unless model says dry)
   );
   const isThunder = thunderByCode || thunderByText;
 
@@ -457,7 +469,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
   const scoreRef     = useRef(score ?? 0);
   const windRef      = useRef(windSpeedKt ?? 0);
   const windDirRef   = useRef(windDirDeg ?? 0);
-  const skyRef       = useRef({ skyCover, shortForecast, precipProbability, weatherCode, airTempF, sunriseTs, sunsetTs });
+  const skyRef       = useRef({ skyCover, shortForecast, precipProbability, weatherCode, precipInPerHr, airTempF, sunriseTs, sunsetTs });
   const tideRef      = useRef({ tideCurrentFt, nextHilos });
   const overlayRef   = useRef({ windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF });
   const rafRef       = useRef(null);
@@ -465,7 +477,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
   useEffect(() => { scoreRef.current = score ?? 0; }, [score]);
   useEffect(() => { windRef.current = windSpeedKt ?? 0; }, [windSpeedKt]);
   useEffect(() => { windDirRef.current = windDirDeg ?? 0; }, [windDirDeg]);
-  useEffect(() => { skyRef.current = { skyCover, shortForecast, precipProbability, weatherCode, airTempF, sunriseTs, sunsetTs }; }, [skyCover, shortForecast, precipProbability, weatherCode, airTempF, sunriseTs, sunsetTs]);
+  useEffect(() => { skyRef.current = { skyCover, shortForecast, precipProbability, weatherCode, precipInPerHr, airTempF, sunriseTs, sunsetTs }; }, [skyCover, shortForecast, precipProbability, weatherCode, precipInPerHr, airTempF, sunriseTs, sunsetTs]);
   useEffect(() => { tideRef.current = { tideCurrentFt, nextHilos }; }, [tideCurrentFt, nextHilos]);
   useEffect(() => { overlayRef.current = { windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF }; }, [windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF]);
 
@@ -478,9 +490,9 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
     const wasActive = godModeRef.current;
     godModeRef.current = !!godMode;
     if (!wasActive && godMode) {
-      const { skyCover: sc, shortForecast: sf, precipProbability: pp, weatherCode: wc, airTempF: atf } = skyRef.current;
+      const { skyCover: sc, shortForecast: sf, precipProbability: pp, weatherCode: wc, precipInPerHr: pih, airTempF: atf } = skyRef.current;
       godStateRef.current = {
-        skyKey:      skyFromData(windRef.current, sc, sf, pp, atf, undefined, undefined, wc),
+        skyKey:      skyFromData(windRef.current, sc, sf, pp, atf, undefined, undefined, wc, pih),
         score:       scoreRef.current,
         paddlerX:    CX,
         windKt:      windRef.current,
@@ -732,8 +744,8 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
 
       // Sky condition (god mode overrides skyFromData entirely)
       const wind = gs ? gs.windKt : windRef.current;
-      const { skyCover: sc, shortForecast: sf, precipProbability: pp, weatherCode: wc, airTempF: atf, sunriseTs: srTs, sunsetTs: ssTs } = skyRef.current;
-      const skyKey = gs?.skyKey ?? skyFromData(wind, sc, sf, pp, atf, srTs, ssTs, wc);
+      const { skyCover: sc, shortForecast: sf, precipProbability: pp, weatherCode: wc, precipInPerHr: skyPih, airTempF: atf, sunriseTs: srTs, sunsetTs: ssTs } = skyRef.current;
+      const skyKey = gs?.skyKey ?? skyFromData(wind, sc, sf, pp, atf, srTs, ssTs, wc, skyPih);
 
       // Shared wind variables — used by clouds, rain, and streaks
       const windKt     = gs ? gs.windKt : windRef.current;

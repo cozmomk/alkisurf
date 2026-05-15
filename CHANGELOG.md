@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - **Chart tick grid** — hour labels now generated at fixed 2-hour intervals across the full time range, not pinned to data point positions (which caused uneven spacing)
 - **Null UV/airTemp treated as zero** — calendar Daylight filter now treats missing UV data as unknown rather than 0, preventing days with no UV data from being incorrectly excluded
 - **Rain icons at low probability** — `conditionsEmoji` now uses NWS text qualifiers to gate rain/shower/drizzle icons: "Slight Chance" (10–20%) and "Chance" (30–50%) fall back to the cloud-cover emoji; only definitive text ("Rain", "Showers") or "Likely" (60–70%) earns 🌧️; mirrors the qualifier-aware logic already applied to thunder icons
+- **Thunder/rain when model says dry** — added `modelSaysDry` gate to both `conditionsEmoji` and `skyFromData`: when WMO code < 45 (overcast, no precipitation) AND Open-Meteo `precipInPerHr` = 0, the numerical model is confident nothing is falling; NWS text like "Showers And Thunderstorms Likely" is suppressed to the cloud-cover emoji; WMO thunderstorm codes (95–99) always override regardless
 
 ### Changed
 - **Design system pass** — CSOWarning banner colors derived from score color tokens (#ff2b55 active, #ff6b1a recent) rather than hardcoded values; dismiss button meets 44px touch target; advisory text updated to match King County guidance

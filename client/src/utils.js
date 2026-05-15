@@ -19,9 +19,17 @@ export function skyEmoji(skyCover, ts) {
 //   3. WMO code fallback — fills in hours where NWS text is null (Open-Meteo covers
 //      gaps in NWS hourly coverage)
 //   4. skyEmoji baseline — cloud-cover-only fallback
-export function conditionsEmoji(skyCover, shortForecast, ts, weatherCode = null) {
+export function conditionsEmoji(skyCover, shortForecast, ts, weatherCode = null, precipInPerHr = null) {
   // Layer 1: WMO thunder always wins regardless of NWS text
   if (weatherCode != null && weatherCode >= 95) return '⛈️'; // 95-99: thunderstorm
+
+  // Model dry-override: if WMO says "no precipitation" (code < 45 = clear/cloudy/fog-free)
+  // AND Open-Meteo measures zero precip, trust the model over NWS text probability.
+  // This prevents "Showers And Thunderstorms Likely" from showing ⛈️ when the numerical
+  // model sees clear skies and 0"/hr — NWS text reflects uncertainty, not reality.
+  // Only applies when BOTH signals confirm dry (never suppresses when either is missing).
+  const modelSaysDry = weatherCode != null && weatherCode < 45
+    && precipInPerHr != null && precipInPerHr <= 0.01;
 
   if (shortForecast) {
     // Layer 2: NWS text (priority order matters — fog before freezing, snow before rain,
@@ -34,15 +42,18 @@ export function conditionsEmoji(skyCover, shortForecast, ts, weatherCode = null)
     if (lc.includes('freezing') || lc.includes('frost')   || lc.includes('ice'))   return '🌨️';
     if (lc.includes('hail'))                                                        return '⛈️';
     if (lc.includes('thunder')  || lc.includes('tstm')) {
-      // Mirror sprite qualifier logic: hedged text ("Chance/Slight/Isolated Thunderstorms")
-      // shows rain 🌧️, not storm ⛈️. Only definitive text ("Thunderstorms Likely",
-      // "Thunderstorms") earns ⛈️. Prevents a 20-40% chance from appearing alarming.
+      // Model says dry → show cloud, not storm
+      if (modelSaysDry) return skyEmoji(skyCover, ts);
+      // Hedged text ("Chance/Slight/Isolated Thunderstorms") → rain 🌧️, not storm.
+      // Definitive text ("Thunderstorms Likely", "Thunderstorms") → ⛈️.
       const hasLowProbQualifier = lc.includes('chance') || lc.includes('slight') || lc.includes('isolated');
       return hasLowProbQualifier ? '🌧️' : '⛈️';
     }
     if (lc.includes('rain')     || lc.includes('shower')  || lc.includes('drizzle')) {
-      // Mirror thunder qualifier logic: hedged text ("Slight Chance/Chance Light Rain")
-      // shows cloud, not rain. Only definitive text ("Rain", "Showers Likely") earns 🌧️.
+      // Model says dry → show cloud, not rain
+      if (modelSaysDry) return skyEmoji(skyCover, ts);
+      // Hedged text ("Slight Chance/Chance Light Rain") → cloud.
+      // Definitive text ("Rain", "Showers Likely") → 🌧️.
       // NWS: "Slight Chance" = 10–20%, "Chance" = 30–50% — below the "probably raining"
       // threshold. No qualifier or "Likely" (60–70%) is definitive enough for a rain icon.
       const hasLowProbQualifier = lc.includes('chance') || lc.includes('slight');

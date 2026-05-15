@@ -46,7 +46,7 @@ function Cell({ hour }) {
     ? hour.actual.windSpeedKt
     : hour.windSpeedKt;
 
-  const sky = conditionsEmoji(hour.skyCover, hour.shortForecast, hour.time, hour.weatherCode);
+  const sky = conditionsEmoji(hour.skyCover, hour.shortForecast, hour.time, hour.weatherCode, hour.precipInPerHr);
   const uv = hour.uvIndex != null ? Math.round(hour.uvIndex) : null;
   const precip = hour.precipProbability != null ? Math.round(hour.precipProbability) : null;
   const cloud = hour.skyCover != null ? Math.round(hour.skyCover) : null;
