@@ -365,7 +365,7 @@ async function buildConditions() {
   // Next hi/lo tide events — include last past event so client can bracket current tide
   const allHilos = tideData?.hilos || [];
   const pastHilos   = allHilos.filter(h => h.ts <= now).sort((a, b) => a.ts - b.ts); // sort asc so slice(-1) reliably gets the most-recent past event
-  const futureHilos = allHilos.filter(h => h.ts > now).slice(0, 4);
+  const futureHilos = allHilos.filter(h => h.ts > now).slice(0, 10); // 10 events ≈ 60h — covers the 48h chart window with room to spare
   const nextHilos   = [...pastHilos.slice(-1), ...futureHilos];
 
   const nearestUVNow = uvData.length ? uvData.reduce((best, u) =>
