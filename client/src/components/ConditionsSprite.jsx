@@ -403,13 +403,18 @@ export function skyFromData(windSpeedKt, skyCover, shortForecast, precipProbabil
   // Thunder detection — two independent signals, either is sufficient:
   // 1. Open-Meteo WMO weather code 95–99 = thunderstorm (separate from rain probability)
   //    95: slight/moderate, 96: with slight hail, 99: with heavy hail
-  // 2. NWS shortForecast text + precipProbability > 50% fallback (when weatherCode unavailable)
+  // 2. NWS shortForecast text logic (when weatherCode unavailable):
+  //    - Low-probability qualifiers ("Chance", "Slight Chance", "Isolated") → require precipProbability > 50%
+  //      because NWS precipProbability bundles rain + thunder and can't separate them
+  //    - Definitive text ("Thunderstorms", "Thunderstorms Likely") → show storm regardless of precipProbability
+  //      because the forecaster is committing to the event, not hedging
   const thunderByCode = weatherCode != null && weatherCode >= 95;
   const hasThunderText = /thunder/.test(forecastText);
+  const hasLowProbQualifier = /chance|slight|isolated/.test(forecastText); // NWS hedging words
   const thunderByText = hasThunderText && (
-    precipProbability != null
-      ? precipProbability > 50
-      : !/chance|slight/.test(forecastText)  // NWS "Likely"/"Thunderstorms" = 60%+ or 80%+
+    hasLowProbQualifier
+      ? (precipProbability != null && precipProbability > 50) // gated: prob must be high
+      : true                                                  // definitive forecast: always storm
   );
   const isThunder = thunderByCode || thunderByText;
 
@@ -452,7 +457,7 @@ export default function ConditionsSprite({ score, windSpeedKt = 0, windDirDeg = 
   const scoreRef     = useRef(score ?? 0);
   const windRef      = useRef(windSpeedKt ?? 0);
   const windDirRef   = useRef(windDirDeg ?? 0);
-  const skyRef       = useRef({ skyCover, shortForecast, precipProbability, airTempF, sunriseTs, sunsetTs });
+  const skyRef       = useRef({ skyCover, shortForecast, precipProbability, weatherCode, airTempF, sunriseTs, sunsetTs });
   const tideRef      = useRef({ tideCurrentFt, nextHilos });
   const overlayRef   = useRef({ windDirLabel, windGustKt, uvIndex, precipInPerHr, waterTempF });
   const rafRef       = useRef(null);

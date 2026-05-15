@@ -11,8 +11,12 @@ export function skyEmoji(skyCover, ts) {
   return '☁️';
 }
 
-// Like skyEmoji but fog/smoke/haze from NWS shortForecast text takes priority
-export function conditionsEmoji(skyCover, shortForecast, ts) {
+// Like skyEmoji but fog/smoke/haze from NWS shortForecast text takes priority.
+// Pass weatherCode (Open-Meteo WMO code) so WMO-detected thunderstorms (≥95) show ⛈️
+// even when NWS shortForecast text doesn't include "thunder".
+export function conditionsEmoji(skyCover, shortForecast, ts, weatherCode = null) {
+  // WMO codes 95–99 = thunderstorm (Open-Meteo primary signal, independent of NWS text)
+  if (weatherCode != null && weatherCode >= 95) return '⛈️';
   if (shortForecast) {
     const lc = shortForecast.toLowerCase();
     if (lc.includes('fog') || lc.includes('mist'))  return '🌫️';

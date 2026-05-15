@@ -169,7 +169,7 @@ export default function ConditionsBar({
     : null;
 
   // Conditions pill — weather icon + temp
-  const wxEmoji = conditionsEmoji(skyCover, shortForecast, Date.now());
+  const wxEmoji = conditionsEmoji(skyCover, shortForecast, Date.now(), weatherCode);
   const condStr = current.airTempF != null
     ? `${wxEmoji ?? '—'} ${Math.round(current.airTempF)}°`
     : (wxEmoji ?? '—');

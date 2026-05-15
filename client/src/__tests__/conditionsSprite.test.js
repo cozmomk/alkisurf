@@ -32,8 +32,24 @@ describe('skyFromData (daytime)', () => {
     expect(skyFromData(5, 80, 'Slight Chance Thunderstorms', 20)).toBe('overcast');
     expect(skyFromData(5, 80, 'Chance Thunderstorms', 40)).toBe('overcast');
   });
+  it('does NOT return storm for isolated thunderstorms (low prob) — isolated is a low-prob qualifier', () => {
+    expect(skyFromData(5, 80, 'Isolated Thunderstorms', 20)).toBe('overcast');
+  });
+  it('returns storm for isolated thunderstorms when prob > 50', () => {
+    expect(skyFromData(5, 80, 'Isolated Thunderstorms', 60)).toBe('storm');
+  });
   it('returns storm for chance thunderstorms when prob > 50', () => {
     expect(skyFromData(5, 80, 'Chance Thunderstorms', 60)).toBe('storm');
+  });
+  it('returns storm for definitive "Thunderstorms" text even with precipProbability 0 (dry thunderstorm)', () => {
+    // "Thunderstorms" (no chance/slight/isolated qualifier) = forecaster committed to the event
+    // NWS precipProbability covers all precip combined; a near-zero value doesn't mean thunder isn't happening
+    expect(skyFromData(5, 80, 'Thunderstorms', 0)).toBe('storm');
+    expect(skyFromData(5, 80, 'Thunderstorms', null)).toBe('storm');
+  });
+  it('returns storm for "Thunderstorms Likely" regardless of precipProbability', () => {
+    expect(skyFromData(5, 80, 'Thunderstorms Likely', 0)).toBe('storm');
+    expect(skyFromData(5, 80, 'Thunderstorms Likely', null)).toBe('storm');
   });
   it('returns rain when forecast text includes rain', () => {
     expect(skyFromData(5, 20, 'Chance of rain showers', null)).toBe('rain');
