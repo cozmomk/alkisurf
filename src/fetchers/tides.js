@@ -57,11 +57,7 @@ export async function fetchTideData(fetchFn) {
     levelRes.json(), predRes.json(), hiloRes.json(), wtempRes.json()
   ]);
 
-  // Current water level
-  const levelData = levelJson.data?.[0];
-  const currentFt = levelData ? parseFloat(levelData.v) : null;
-
-  // Hourly predictions for the next 48h
+  // Hourly predictions for the next 48h (built first — used for live-reading sanity check)
   const hourly = (predJson.predictions || []).map(p => ({
     ts: new Date(p.t).getTime(),
     ft: parseFloat(p.v),
@@ -74,10 +70,40 @@ export async function fetchTideData(fetchFn) {
     type: p.type, // H or L
   }));
 
-  // Tide rate: ft/hr estimated from adjacent predictions
+  // Current water level — with staleness / sanity fallback.
+  // NOAA's 'date: latest' can return hours-old data during sensor outages or verification delays.
+  // If the live reading differs > 2 ft from the nearest hourly prediction, it's almost certainly
+  // stale (tides change at most ~1.5 ft/hr; predictions are accurate to ~0.1 ft). Fall back to
+  // the prediction so the pill, gauge, and chart dot all reflect reality.
+  const levelData = levelJson.data?.[0];
+  let currentFt = levelData ? parseFloat(levelData.v) : null;
+  if (currentFt != null && hourly.length > 0) {
+    const now = Date.now();
+    const nearest = hourly.reduce((best, p) =>
+      Math.abs(p.ts - now) < Math.abs(best.ts - now) ? p : best
+    );
+    if (Math.abs(currentFt - nearest.ft) > 2) {
+      console.warn(
+        `[tides] Live reading ${currentFt.toFixed(2)} ft differs >${2} ft from ` +
+        `prediction ${nearest.ft.toFixed(2)} ft — treating as stale, using prediction`
+      );
+      currentFt = nearest.ft;
+    }
+  }
+
+  // Tide rate: ft/hr at current time, using the two hourly predictions that bracket NOW.
+  // (Avoid hourly[0]-hourly[1] which is the midnight-to-1am rate, not the current rate.)
   let tideRateFtHr = 0;
   if (hourly.length >= 2) {
-    tideRateFtHr = hourly[1].ft - hourly[0].ft; // ft per hour
+    const now = Date.now();
+    const before = [...hourly].filter(p => p.ts <= now).sort((a, b) => b.ts - a.ts)[0];
+    const after  = [...hourly].filter(p => p.ts >  now).sort((a, b) => a.ts - b.ts)[0];
+    if (before && after) {
+      tideRateFtHr = (after.ft - before.ft) / ((after.ts - before.ts) / 3600000);
+    } else {
+      // Fallback: first two hourly slots
+      tideRateFtHr = hourly[1].ft - hourly[0].ft;
+    }
   }
 
   // Rising or falling
