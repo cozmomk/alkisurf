@@ -40,10 +40,13 @@ function summarizeDay(dayKey, hours, bestWindows) {
     Math.abs(ptHour(h.time) - 12) < Math.abs(ptHour(best.time) - 12) ? h : best
   );
 
-  // Best window for this day
+  // Best window for this day — include windows that overlap this day, not just start on it.
+  // A multi-day glass streak (e.g. Fri 1pm → Mon 2pm) should appear on Sat and Sun cards too.
   const now = Date.now();
+  const dayStart = hours.length ? Math.min(...hours.map(h => h.time)) : 0;
+  const dayEnd   = hours.length ? Math.max(...hours.map(h => h.time)) + 3600000 : Infinity;
   const dayWindows = (bestWindows || []).filter(w =>
-    ptDayKey(w.start) === dayKey && w.end > now
+    w.start < dayEnd && w.end > dayStart && w.end > now
   );
   // Pair N+S windows that overlap
   const northWin = dayWindows.filter(w => w.side === 'north').sort((a, b) => b.score - a.score)[0];
@@ -68,6 +71,8 @@ function summarizeDay(dayKey, hours, bestWindows) {
     bestWin,
     northWin,
     southWin,
+    dayStart,
+    dayEnd,
   };
 }
 
@@ -83,7 +88,7 @@ function fmtSunTime(ts) {
 }
 
 function DayCard({ summary, isFirst, isSecond }) {
-  const { highF, lowF, windMin, windMax, gustPeak, windDir, uvPeak, precipMax, precipAmtMax, skyCover, shortForecast, weatherCode, ts, bestWin, northWin, southWin, sunriseTs, sunsetTs } = summary;
+  const { highF, lowF, windMin, windMax, gustPeak, windDir, uvPeak, precipMax, precipAmtMax, skyCover, shortForecast, weatherCode, ts, bestWin, northWin, southWin, sunriseTs, sunsetTs, dayStart, dayEnd } = summary;
   const sky = conditionsEmoji(skyCover, shortForecast, ts, weatherCode);
   const hasWindow = bestWin != null;
   const label = isFirst ? 'Today' : isSecond ? 'Tomorrow' : fmt(ts, { weekday: 'short' });
@@ -168,7 +173,7 @@ function DayCard({ summary, isFirst, isSecond }) {
 
       {/* Best window */}
       {hasWindow ? (
-        <BestWindowSection northWin={northWin} southWin={southWin} bestWin={bestWin} />
+        <BestWindowSection northWin={northWin} southWin={southWin} bestWin={bestWin} dayStart={dayStart} dayEnd={dayEnd} />
       ) : (
         <div className="flex items-center gap-1">
           <span style={{ color: '#ff2b55', fontSize: 10 }}>✕</span>
@@ -179,15 +184,15 @@ function DayCard({ summary, isFirst, isSecond }) {
   );
 }
 
-function BestWindowSection({ northWin, southWin, bestWin }) {
+function BestWindowSection({ northWin, southWin, bestWin, dayStart, dayEnd }) {
   const hasBoth = northWin && southWin;
 
   if (hasBoth) {
     return (
       <div className="flex flex-col gap-1">
         <span className="text-[8px]" style={{ color: '#3a5a70' }}>Best windows</span>
-        <WindowRow w={northWin} sideLabel="N" />
-        <WindowRow w={southWin} sideLabel="S" />
+        <WindowRow w={northWin} sideLabel="N" dayStart={dayStart} dayEnd={dayEnd} />
+        <WindowRow w={southWin} sideLabel="S" dayStart={dayStart} dayEnd={dayEnd} />
       </div>
     );
   }
@@ -204,7 +209,7 @@ function BestWindowSection({ northWin, southWin, bestWin }) {
             {bestWin.label}
           </span>
           <span className="text-[8px]" style={{ color: '#5a7fa0' }}>
-            {fmtWindow(bestWin.start, bestWin.end)}
+            {fmtWindow(bestWin.start, bestWin.end, dayStart, dayEnd)}
           </span>
         </div>
       </div>
@@ -212,22 +217,29 @@ function BestWindowSection({ northWin, southWin, bestWin }) {
   );
 }
 
-function WindowRow({ w, sideLabel }) {
+function WindowRow({ w, sideLabel, dayStart, dayEnd }) {
   return (
     <div className="flex items-center gap-1.5">
       <span className="text-[8px] font-bold w-3" style={{ color: '#3a5a70' }}>{sideLabel}</span>
       <span className="text-sm font-black leading-none" style={{ color: scoreColor(w.score) }}>{w.score}</span>
       <div className="flex flex-col min-w-0 flex-1">
         <span className="text-[8px] font-bold truncate" style={{ color: scoreColor(w.score) }}>{w.label}</span>
-        <span className="text-[8px]" style={{ color: '#5a7fa0' }}>{fmtWindow(w.start, w.end)}</span>
+        <span className="text-[8px]" style={{ color: '#5a7fa0' }}>{fmtWindow(w.start, w.end, dayStart, dayEnd)}</span>
       </div>
     </div>
   );
 }
 
-function fmtWindow(start, end) {
-  const s = new Date(start).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: true });
-  const e = new Date(end).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: true });
+function fmtWindow(start, end, dayStart, dayEnd) {
+  // Clip display times to the current day's bounds so a multi-day window
+  // (e.g. Fri 1pm → Mon 2pm) shows as "All day" or a clipped range on Sat/Sun.
+  const dispStart = dayStart != null ? Math.max(start, dayStart) : start;
+  const dispEnd   = dayEnd   != null ? Math.min(end,   dayEnd)   : end;
+  const crossesMidnight = ptDayKey(start) !== ptDayKey(end - 1);
+  const fillsDay = dayStart != null && dispStart <= dayStart && dispEnd >= dayEnd;
+  if (crossesMidnight && fillsDay) return 'All day';
+  const s = new Date(dispStart).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: true });
+  const e = new Date(dispEnd).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: true });
   return `${s} – ${e}`;
 }
 
